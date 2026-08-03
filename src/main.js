@@ -13,6 +13,7 @@ import { renderTorre } from './views/torre.js';
 import { renderEstado } from './views/estado.js';
 import { renderBodega } from './views/bodega.js';
 import { renderVentas } from './views/ventas.js';
+import { renderPuntoVenta } from './views/puntoVenta.js';
 import { tieneFuncion } from './planes.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
@@ -20,6 +21,7 @@ registrarRuta('torre', renderTorre, 'torre');
 registrarRuta('estado', renderEstado, 'estado');
 registrarRuta('bodega', renderBodega, 'bodega');
 registrarRuta('ventas', renderVentas, 'ventas');
+registrarRuta('punto_venta', renderPuntoVenta, 'punto_venta');
 
 const NAV = [
   { ruta: 'recepcion', etiqueta: 'Recepción', funcion: 'recepcion' },
@@ -27,9 +29,8 @@ const NAV = [
   { ruta: 'torre', etiqueta: 'Torre de control', funcion: 'torre' },
   { ruta: 'bodega', etiqueta: 'Bodega', funcion: 'bodega' },
   { ruta: 'ventas', etiqueta: 'Ventas', funcion: 'ventas' },
-  // el resto de las pantallas (Punto de venta, Administración)
-  // se agregan acá a medida que se migran, siguiendo el mismo patrón —
-  // cada una con su "funcion" correspondiente de src/planes.js.
+  { ruta: 'punto_venta', etiqueta: 'Punto de venta', funcion: 'punto_venta' },
+  // Administración se agrega acá al final de la migración.
 ];
 
 const app = document.getElementById('app');

@@ -21,6 +21,11 @@ export async function agregarEmpleado(nombre) {
   return data;
 }
 
+export async function eliminarEmpleado(empleadoId) {
+  const { error } = await supabase.from('empleados').delete().eq('id', empleadoId);
+  if (error) throw error;
+}
+
 /** Rellena un <datalist> con los nombres de los trabajadores, para autocompletar campos "responsable". */
 export async function llenarDatalistEmpleados(datalistEl) {
   const empleados = await listarEmpleados();

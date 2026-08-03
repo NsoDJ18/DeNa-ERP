@@ -101,6 +101,14 @@ export async function archivarOrden(ordenId) {
   return data;
 }
 
+/** Restaura una orden archivada de vuelta a la lista activa. */
+export async function restaurarOrden(ordenId) {
+  const { data, error } = await supabase
+    .from('ordenes').update({ archivado: false }).eq('id', ordenId).select().single();
+  if (error) throw error;
+  return data;
+}
+
 /** Trae una sola orden por su id (para el modal de detalle). */
 export async function obtenerOrden(ordenId) {
   const { data, error } = await supabase.from('ordenes').select('*').eq('id', ordenId).single();

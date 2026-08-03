@@ -100,7 +100,7 @@ function semaforo(o) {
 function etiquetaSemaforo(s) {
   return s === 'verde' ? '🟢 A tiempo' : s === 'amarillo' ? '🟡 Atrasado' : '🔴 Fuera de plazo';
 }
-function badge(estado) {
+export function badge(estado) {
   const mapa = {
     ingreso: ['Ingreso de OT', '#8890A0'], diseno: ['En diseño', '#C9A24F'],
     fabricacion: ['Fabricación', '#D68A4E'], calidad: ['Control de calidad', '#5D7DA8'],
@@ -111,7 +111,7 @@ function badge(estado) {
   return `<span class="etiqueta-estado" style="color:${color};background:${color}1A;">${texto}</span>`;
 }
 
-async function abrirDetalle(ordenId) {
+export async function abrirDetalle(ordenId) {
   const o = await obtenerOrden(ordenId);
   pintarDetalle(o);
 }

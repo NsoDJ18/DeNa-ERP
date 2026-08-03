@@ -21,3 +21,10 @@ export async function guardarTiemposMax(tiemposMax) {
     .upsert({ empresa_id: empresaActivaId(), tiempos_max: tiemposMax });
   if (error) throw error;
 }
+
+/** Actualiza el texto de sucursal que aparece bajo el logo (solo admin, por RLS). */
+export async function guardarSucursal(sucursalTexto) {
+  const { error } = await supabase
+    .from('empresas').update({ sucursal_texto: sucursalTexto }).eq('id', empresaActivaId());
+  if (error) throw error;
+}

@@ -53,20 +53,19 @@ planes agregado.
 - ⬜ Botones "Ventana externa" y "Pantalla completa"
 - ⬜ Reloj en vivo
 
-## Administración (según Imágenes 2 y 3)
-- ⬜ Login con usuario/clave (hoy solo existe el login de Supabase Auth normal —
-      falta decidir: ¿mantenemos un segundo candado tipo el original, o alcanza
-      con que sea admin real de Supabase? **Pendiente de decisión, ver abajo.**)
-- ⬜ Sub-navegación: Resumen | Bodega | Ventas y caja | Empleados | Configuración
-- ⬜ KPIs (total pedidos, en proceso, cerrados con éxito, cancelados, no
-      retirados, ingresos totales, saldo por cobrar, ticket promedio)
-- ⬜ Exportar a Excel (rango de fechas + "semestre actual")
-- ⬜ Tabla completa de pedidos con filtros (buscar, estado, tipo)
-- ⬜ Bodega (productos, SKU, stock, alertas de mínimo)
-- ⬜ Empleados (lista + autocompletado en toda la app)
-- ⬜ Configuración (tiempos máximos por estación, nombre de sucursal, credenciales)
-- ⬜ Registro de servicios cancelados (archivar/restaurar)
-- ⬜ Respaldo de ventas semestral (exportar/restaurar JSON)
+## Administración
+- ✅ Sub-navegación: Resumen | Empleados | Configuración
+- ✅ KPIs (total, en proceso, cerrados con éxito, cancelados, no retirados, ingresos, saldo, ticket promedio)
+- ✅ Exportar a Excel (rango de fechas), carga solo al usarlo
+- ✅ Tabla de pedidos con búsqueda, reutiliza el mismo modal de detalle de Estado
+- ✅ Registro de servicios cancelados (archivar/restaurar)
+- ✅ Empleados (agregar/eliminar)
+- ✅ Configuración (tiempos máximos por estación, nombre de sucursal)
+- ✅ Protegida por rol (no solo por menú — si alguien sin rol admin entra por URL, ve un aviso)
+- ⬜ Pendiente: filtro por estado/tipo en la tabla (hoy solo hay buscador de texto)
+- ⬜ Pendiente: Bodega/Ventas y caja ya NO están duplicadas acá — viven como
+      pantallas propias en el menú principal (decisión de arquitectura, más
+      simple que el HTML original que las anidaba dentro de Admin)
 
 ## Decisión sobre el login de Administración — RESUELTO ✅
 

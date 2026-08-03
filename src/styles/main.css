@@ -269,3 +269,11 @@ table.tabla tr:last-child td{ border-bottom:none; }
 .stat{ background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow); }
 .stat-etiqueta{ font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;font-weight:600; }
 .stat-valor{ font-family:'Fraunces',serif;font-size:22px;color:var(--navy);margin-top:4px;font-weight:600; }
+
+/* ===================== sub-navegación (Administración) ===================== */
+.botones-sub{ display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px; }
+.botones-sub button{
+  font-family:inherit;font-size:13px;font-weight:600;background:none;border:1px solid var(--line);
+  color:var(--ink-soft);padding:7px 14px;border-radius:999px;cursor:pointer;
+}
+.botones-sub button.activo{ background:var(--navy);border-color:var(--navy);color:#fff; }

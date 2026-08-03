@@ -14,6 +14,7 @@ import { renderEstado } from './views/estado.js';
 import { renderBodega } from './views/bodega.js';
 import { renderVentas } from './views/ventas.js';
 import { renderPuntoVenta } from './views/puntoVenta.js';
+import { renderAdmin } from './views/admin.js';
 import { tieneFuncion } from './planes.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
@@ -30,7 +31,7 @@ const NAV = [
   { ruta: 'bodega', etiqueta: 'Bodega', funcion: 'bodega' },
   { ruta: 'ventas', etiqueta: 'Ventas', funcion: 'ventas' },
   { ruta: 'punto_venta', etiqueta: 'Punto de venta', funcion: 'punto_venta' },
-  // Administración se agrega acá al final de la migración.
+  { ruta: 'admin', etiqueta: 'Administración', funcion: 'admin_resumen' },
 ];
 
 const app = document.getElementById('app');
@@ -156,6 +157,7 @@ function renderAppShell(sesion, activa) {
   });
   document.getElementById('btn-salir').onclick = async () => { await cerrarSesion(); };
 
+  registrarRuta('admin', (contenedor) => renderAdmin(contenedor, activa), 'admin_resumen');
   configurarControlAcceso((funcion) => tieneFuncion(activa.plan, funcion));
   iniciarRouter();
 }

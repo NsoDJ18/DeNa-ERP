@@ -15,8 +15,16 @@ body{
   margin:0;
   font-family:'Work Sans', system-ui, sans-serif;
   color:var(--ink);
-  background:var(--bg-soft);
+  background-image: linear-gradient(rgba(15,17,15,0.85), rgba(15,17,15,0.85)), url('../assets/fondo-regalos.jpg');
+  background-size: cover;
+  background-position: center top;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100vh;
 }
+/* Nota: este fondo es específico de la demo con "Regalos con Cariño". Cuando
+   se implemente "marca_propia" (plan Oro en src/planes.js), esto debería
+   pasar a ser configurable por empresa en vez de fijo acá. */
 .pantalla-centrada{
   min-height:100vh;
   display:flex;

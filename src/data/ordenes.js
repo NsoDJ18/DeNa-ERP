@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js';
 import { empresaActivaId } from '../auth/session.js';
+import { localDateStr } from '../lib/util.js';
 
 // ============================================================
 // ÓRDENES DE TRABAJO
@@ -126,6 +127,25 @@ export async function agregarNota(ordenId, texto) {
   const { data, error } = await supabase.from('ordenes').update({ notas }).eq('id', ordenId).select().single();
   if (error) throw error;
   return data;
+}
+
+/** Trae solo los pagos (abonos) registrados en órdenes de trabajo para una
+ *  fecha dada — para mostrarlos junto a las ventas de mostrador en Punto de
+ *  venta, y que el cajero vea TODA la plata que entró en el turno, no solo
+ *  las ventas al mostrador. */
+export async function listarAbonosDelDia(fecha) {
+  const { data, error } = await supabase
+    .from('ordenes').select('folio, cliente, pagos').eq('empresa_id', empresaActivaId());
+  if (error) throw error;
+  const abonos = [];
+  data.forEach((o) => {
+    (o.pagos || []).forEach((p) => {
+      if (localDateStr(p.fecha) === fecha) {
+        abonos.push({ fecha: p.fecha, monto: p.monto, metodo: p.metodo, folio: o.folio, cliente: o.cliente });
+      }
+    });
+  });
+  return abonos;
 }
 
 /** Suscripción en tiempo real: llama a `callback` cada vez que cambian las órdenes de la empresa activa. */

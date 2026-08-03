@@ -277,3 +277,31 @@ table.tabla tr:last-child td{ border-bottom:none; }
   color:var(--ink-soft);padding:7px 14px;border-radius:999px;cursor:pointer;
 }
 .botones-sub button.activo{ background:var(--navy);border-color:var(--navy);color:#fff; }
+
+/* ===================== Monitor (pantalla TV) ===================== */
+.monitor-top{ display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px; }
+.monitor-titulo{ font-family:'Work Sans';font-weight:400;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.1em; }
+.monitor-reloj{ font-family:'JetBrains Mono',monospace;font-weight:400;font-size:20px;color:var(--navy);margin-top:2px; }
+.monitor-buscador{ max-width:520px;margin:0 auto 26px;text-align:center; }
+.monitor-buscador input{
+  width:100%;font-family:inherit;font-size:15px;font-weight:400;padding:13px 18px;border-radius:999px;
+  border:1px solid var(--line);background:var(--bg);color:var(--ink);outline:none;text-align:center;
+}
+.monitor-buscador input:focus{ border-color:var(--gold); }
+.monitor-buscador-hint{ display:block;margin-top:7px;font-size:11.5px;color:var(--ink-soft); }
+.monitor-track-header{ display:flex;padding:0 0 14px;margin-bottom:16px;border-bottom:1px solid var(--line); }
+.monitor-track-spacer{ width:240px;flex:none; }
+.monitor-track-estaciones{ flex:1;display:flex;justify-content:space-between;padding:0 10px; }
+.monitor-track-estaciones span{ font-size:11.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;text-align:center;flex:1;font-weight:600; }
+.monitor-fila{ display:flex;align-items:center;margin-bottom:22px; }
+.monitor-fila-info{ width:240px;flex:none;padding-right:16px; }
+.monitor-track{ position:relative;flex:1;height:44px;padding:0 10px; }
+.monitor-track-linea{ position:absolute;top:50%;left:10px;right:10px;height:2px;background:var(--line);transform:translateY(-50%); }
+.monitor-checkpoint{ position:absolute;top:50%;width:7px;height:7px;border-radius:50%;background:var(--line);transform:translate(-50%,-50%); }
+.monitor-marcador{ position:absolute;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;transition:left 1s ease; }
+.monitor-marcador-punto{ width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;color:#12100E;box-shadow:0 0 0 4px var(--bg-soft); }
+.monitor-marcador-tiempo{ position:absolute;top:-20px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-soft);white-space:nowrap; }
+.monitor-marcador.alerta .monitor-marcador-punto{ animation:pulso 1.5s infinite; }
+@keyframes pulso{ 0%,100%{ box-shadow:0 0 0 4px var(--bg-soft),0 0 0 rgba(194,86,79,.5); } 50%{ box-shadow:0 0 0 4px var(--bg-soft),0 0 14px rgba(194,86,79,.85); } }
+.monitor-vacio{ text-align:center;padding:60px 20px;color:var(--ink-soft);font-size:14px; }
+@media(max-width:700px){ .monitor-fila-info,.monitor-track-spacer{ width:150px; } }

@@ -15,6 +15,7 @@ import { renderBodega } from './views/bodega.js';
 import { renderVentas } from './views/ventas.js';
 import { renderPuntoVenta } from './views/puntoVenta.js';
 import { renderAdmin } from './views/admin.js';
+import { renderMonitor } from './views/monitor.js';
 import { tieneFuncion } from './planes.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
@@ -23,6 +24,7 @@ registrarRuta('estado', renderEstado, 'estado');
 registrarRuta('bodega', renderBodega, 'bodega');
 registrarRuta('ventas', renderVentas, 'ventas');
 registrarRuta('punto_venta', renderPuntoVenta, 'punto_venta');
+registrarRuta('monitor', renderMonitor, 'monitor');
 
 const NAV = [
   { ruta: 'recepcion', etiqueta: 'Recepción', funcion: 'recepcion' },
@@ -31,7 +33,8 @@ const NAV = [
   { ruta: 'bodega', etiqueta: 'Bodega', funcion: 'bodega' },
   { ruta: 'ventas', etiqueta: 'Ventas', funcion: 'ventas' },
   { ruta: 'punto_venta', etiqueta: 'Punto de venta', funcion: 'punto_venta' },
-  { ruta: 'admin', etiqueta: 'Administración', funcion: 'admin_resumen' },
+  { ruta: 'monitor', etiqueta: '📺 Monitor', funcion: 'monitor' },
+  { ruta: 'admin', etiqueta: 'Administración', funcion: 'admin_resumen', soloAdmin: true },
 ];
 
 const app = document.getElementById('app');
@@ -139,7 +142,7 @@ function renderSinEmpresa() {
 // ============================================================
 function renderAppShell(sesion, activa) {
   app.className = ''; // ya no es pantalla centrada
-  const navVisible = NAV.filter((n) => tieneFuncion(activa.plan, n.funcion));
+  const navVisible = NAV.filter((n) => tieneFuncion(activa.plan, n.funcion) && (!n.soloAdmin || activa.rol === 'admin'));
   app.innerHTML = `
     <div class="app-shell">
       <div class="app-nav">

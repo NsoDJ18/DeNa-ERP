@@ -1,7 +1,8 @@
 import { listarProductos } from '../data/productos.js';
 import { listarClientes } from '../data/clientes.js';
 import { listarVentasDeHoy, registrarVenta, kpisDelDia } from '../data/ventasMostrador.js';
-import { escapeHtml, money, toast } from '../lib/util.js';
+import { listarAbonosDelDia } from '../data/ordenes.js';
+import { escapeHtml, money, todayStr, toast } from '../lib/util.js';
 
 let carrito = [];
 
@@ -47,10 +48,11 @@ export async function renderPuntoVenta(contenedor) {
     <div class="stats" id="pv-kpis" style="margin-top:22px;"></div>
 
     <div style="margin-top:10px;">
-      <h3 style="font-size:15px;margin-bottom:10px;">Ventas de mostrador de hoy</h3>
+      <h3 style="font-size:15px;margin-bottom:10px;">Movimientos de caja de hoy</h3>
+      <p class="subtitulo" style="margin-bottom:10px;">Ventas de mostrador + abonos recibidos en pedidos de Recepción.</p>
       <div class="tabla-wrap">
         <table class="tabla">
-          <thead><tr><th>Hora</th><th>Productos</th><th>Total</th><th>Método</th><th>Vendedor(a)</th><th>Cliente</th></tr></thead>
+          <thead><tr><th>Hora</th><th>Origen</th><th>Detalle</th><th>Total</th><th>Método</th><th>Responsable</th></tr></thead>
           <tbody id="pv-historial"></tbody>
         </table>
       </div>
@@ -141,7 +143,7 @@ export async function renderPuntoVenta(contenedor) {
   }
 
   async function pintarHistorialYKpis() {
-    const ventasHoy = await listarVentasDeHoy();
+    const [ventasHoy, abonosHoy] = await Promise.all([listarVentasDeHoy(), listarAbonosDelDia(todayStr())]);
     const kpis = kpisDelDia(ventasHoy);
     document.getElementById('pv-kpis').innerHTML = `
       <div class="stat"><div class="stat-etiqueta">Ventas de mostrador hoy</div><div class="stat-valor">${kpis.cantidad}</div></div>
@@ -149,13 +151,27 @@ export async function renderPuntoVenta(contenedor) {
       <div class="stat"><div class="stat-etiqueta">Ticket promedio</div><div class="stat-valor">${money(kpis.ticketProm)}</div></div>
       <div class="stat"><div class="stat-etiqueta" style="font-size:15px;">Más vendido hoy</div><div class="stat-valor" style="font-size:15px;">${escapeHtml(kpis.masVendido)}</div></div>
     `;
-    document.getElementById('pv-historial').innerHTML = ventasHoy.length
-      ? ventasHoy.map((v) => `<tr>
-          <td>${new Date(v.fecha).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</td>
-          <td>${escapeHtml(v.items.map((it) => it.cantidad + '× ' + it.nombre).join(', '))}</td>
-          <td>${money(v.total)}</td><td>${escapeHtml(v.metodo_pago)}</td><td>${escapeHtml(v.responsable)}</td>
-          <td>${escapeHtml(v.cliente_nombre) || '—'}</td>
+
+    const movimientos = [
+      ...ventasHoy.map((v) => ({
+        fecha: v.fecha, origen: '🛍️ Mostrador',
+        detalle: v.items.map((it) => it.cantidad + '× ' + it.nombre).join(', '),
+        total: v.total, metodo: v.metodo_pago, responsable: v.responsable,
+      })),
+      ...abonosHoy.map((a) => ({
+        fecha: a.fecha, origen: '🧾 Abono pedido',
+        detalle: `${a.folio} — ${a.cliente}`,
+        total: a.monto, metodo: a.metodo, responsable: '—',
+      })),
+    ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    document.getElementById('pv-historial').innerHTML = movimientos.length
+      ? movimientos.map((m) => `<tr>
+          <td>${new Date(m.fecha).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</td>
+          <td>${m.origen}</td>
+          <td>${escapeHtml(m.detalle)}</td>
+          <td>${money(m.total)}</td><td>${escapeHtml(m.metodo)}</td><td>${escapeHtml(m.responsable)}</td>
         </tr>`).join('')
-      : `<tr><td colspan="6"><div class="vacio">Sin ventas de mostrador todavía hoy.</div></td></tr>`;
+      : `<tr><td colspan="6"><div class="vacio">Sin movimientos de caja todavía hoy.</div></td></tr>`;
   }
 }

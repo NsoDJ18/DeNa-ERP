@@ -7,21 +7,23 @@ import {
   resolverEmpresaActiva,
   fijarEmpresaActiva,
 } from './auth/session.js';
-import { registrarRuta, iniciarRouter } from './router.js';
+import { registrarRuta, iniciarRouter, configurarControlAcceso } from './router.js';
 import { renderRecepcion } from './views/recepcion.js';
 import { renderTorre } from './views/torre.js';
 import { renderEstado } from './views/estado.js';
+import { tieneFuncion } from './planes.js';
 
-registrarRuta('recepcion', renderRecepcion);
-registrarRuta('torre', renderTorre);
-registrarRuta('estado', renderEstado);
+registrarRuta('recepcion', renderRecepcion, 'recepcion');
+registrarRuta('torre', renderTorre, 'torre');
+registrarRuta('estado', renderEstado, 'estado');
 
 const NAV = [
-  { ruta: 'recepcion', etiqueta: 'Recepción' },
-  { ruta: 'estado', etiqueta: 'Estado' },
-  { ruta: 'torre', etiqueta: 'Torre de control' },
+  { ruta: 'recepcion', etiqueta: 'Recepción', funcion: 'recepcion' },
+  { ruta: 'estado', etiqueta: 'Estado', funcion: 'estado' },
+  { ruta: 'torre', etiqueta: 'Torre de control', funcion: 'torre' },
   // el resto de las pantallas (Ventas, Punto de venta, Bodega, Administración)
-  // se agregan acá a medida que se migran, siguiendo el mismo patrón.
+  // se agregan acá a medida que se migran, siguiendo el mismo patrón —
+  // cada una con su "funcion" correspondiente de src/planes.js.
 ];
 
 const app = document.getElementById('app');
@@ -129,12 +131,13 @@ function renderSinEmpresa() {
 // ============================================================
 function renderAppShell(sesion, activa) {
   app.className = ''; // ya no es pantalla centrada
+  const navVisible = NAV.filter((n) => tieneFuncion(activa.plan, n.funcion));
   app.innerHTML = `
     <div class="app-shell">
       <div class="app-nav">
         <div class="marca">DENA ERP <span style="color:var(--ink-soft);font-weight:400;font-size:12px;">— ${activa.nombreEmpresa}</span></div>
         <div class="botones" id="nav-botones">
-          ${NAV.map((n) => `<button class="nav-boton" data-ruta="${n.ruta}">${n.etiqueta}</button>`).join('')}
+          ${navVisible.map((n) => `<button class="nav-boton" data-ruta="${n.ruta}">${n.etiqueta}</button>`).join('')}
           <button class="nav-boton" id="btn-salir" style="border-color:#F0C9C9;color:#9B2C2C;">Cerrar sesión</button>
         </div>
       </div>
@@ -146,6 +149,7 @@ function renderAppShell(sesion, activa) {
   });
   document.getElementById('btn-salir').onclick = async () => { await cerrarSesion(); };
 
+  configurarControlAcceso((funcion) => tieneFuncion(activa.plan, funcion));
   iniciarRouter();
 }
 

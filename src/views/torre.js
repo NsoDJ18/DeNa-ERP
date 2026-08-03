@@ -11,8 +11,6 @@ const ESTACIONES = [
 ];
 const INDICE = Object.fromEntries(ESTACIONES.map((e, i) => [e.key, i]));
 
-let cancelarSuscripcion = null;
-
 export async function renderTorre(contenedor) {
   contenedor.innerHTML = `
     <div class="encabezado-vista">
@@ -25,9 +23,10 @@ export async function renderTorre(contenedor) {
 
   await pintar();
 
-  // tiempo real: si alguien más mueve un pedido, se refresca sola
-  if (cancelarSuscripcion) cancelarSuscripcion();
-  cancelarSuscripcion = suscribirseAOrdenes(() => pintar());
+  // tiempo real: si alguien más mueve un pedido, se refresca sola.
+  // Devolvemos la función de limpieza: el router la llama solo al salir de esta pantalla.
+  const cancelarSuscripcion = suscribirseAOrdenes(() => pintar());
+  return cancelarSuscripcion;
 
   async function pintar() {
     const [ordenes, tmax] = await Promise.all([listarOrdenes(), obtenerTiemposMax()]);

@@ -17,7 +17,7 @@ create table empresas (
   rut           text,
   rubro         text,                          -- ej: "Imprenta digital", "Peluquería", etc.
   sucursal_texto text default '',
-  plan          text default 'gratis',         -- 'gratis' | 'pro' | 'enterprise' (para cuando monetices)
+  plan          text not null default 'bronce' check (plan in ('bronce','plata','oro')),
   creado_en     timestamptz default now()
 );
 
@@ -191,6 +191,17 @@ create policy tenant_isolation on empleados for all
 -- usuarios_empresas: cada usuario solo ve sus propias membresías
 create policy propia_membresia on usuarios_empresas for select
   using (usuario_id = auth.uid());
+
+-- empresas: un usuario puede ver (y un admin editar) solo las empresas
+-- a las que pertenece — sin esto, RLS bloquea todo por defecto y el
+-- nombre de la empresa llega "undefined" al frontend.
+create policy ver_empresas_propias on empresas for select
+  using (id in (select empresas_del_usuario()));
+create policy admin_edita_su_empresa on empresas for update
+  using (id in (
+    select empresa_id from usuarios_empresas
+    where usuario_id = auth.uid() and rol = 'admin'
+  ));
 
 -- Ejemplo de política diferenciada por rol (solo admin puede borrar productos):
 -- create policy solo_admin_borra on productos for delete

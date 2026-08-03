@@ -13,7 +13,6 @@ const INDICE = Object.fromEntries(ESTACIONES.map((e, i) => [e.key, i]));
 
 let ordenesCache = [];
 let filtroSemaforo = '';
-let cancelarSuscripcion = null;
 
 export async function renderEstado(contenedor) {
   contenedor.innerHTML = `
@@ -41,8 +40,8 @@ export async function renderEstado(contenedor) {
   });
 
   await pintar();
-  if (cancelarSuscripcion) cancelarSuscripcion();
-  cancelarSuscripcion = suscribirseAOrdenes(() => pintar());
+  const cancelarSuscripcion = suscribirseAOrdenes(() => pintar());
+  return cancelarSuscripcion;
 
   async function pintar() {
     ordenesCache = await listarOrdenes();

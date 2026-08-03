@@ -39,6 +39,12 @@ export async function siguienteFolioNum() {
 
 /** Crea una nueva orden de trabajo (equivalente a "Recepción" en el prototipo). */
 export async function crearOrden(datosOrden) {
+  // metodoPago NO es una columna de la tabla "ordenes" — solo se usa para
+  // construir el primer registro dentro de "pagos". Si se manda tal cual,
+  // Supabase rechaza el insert completo (columna inexistente) y la orden
+  // nunca se crea, sin ningún aviso visible más allá de la consola.
+  const { metodoPago, ...datosColumnas } = datosOrden;
+
   const folioNum = await siguienteFolioNum();
   const folio = 'OT-' + String(folioNum).padStart(4, '0');
   const ahora = new Date().toISOString();
@@ -51,11 +57,11 @@ export async function crearOrden(datosOrden) {
     timestamps: { ingreso: ahora },
     notas: [],
     fotos: [],
-    pagos: datosOrden.abono > 0
-      ? [{ monto: datosOrden.abono, metodo: datosOrden.metodoPago || 'No especificado', fecha: ahora }]
+    pagos: datosColumnas.abono > 0
+      ? [{ monto: datosColumnas.abono, metodo: metodoPago || 'No especificado', fecha: ahora }]
       : [],
-    historial: [{ texto: `Orden creada por ${datosOrden.responsable || '—'}.`, fecha: ahora }],
-    ...datosOrden,
+    historial: [{ texto: `Orden creada por ${datosColumnas.responsable || '—'}.`, fecha: ahora }],
+    ...datosColumnas,
   };
 
   const { data, error } = await supabase.from('ordenes').insert(nuevaOrden).select().single();
@@ -116,8 +122,12 @@ export async function agregarNota(ordenId, texto) {
 
 /** Suscripción en tiempo real: llama a `callback` cada vez que cambian las órdenes de la empresa activa. */
 export function suscribirseAOrdenes(callback) {
+  // nombre único por suscripción — reusar el mismo nombre en dos pantallas a
+  // la vez hace que Supabase reclame el canal ya suscrito y falle al agregar
+  // el segundo listener ("cannot add postgres_changes callbacks after subscribe()")
+  const nombreCanal = `ordenes-cambios-${crypto.randomUUID()}`;
   const canal = supabase
-    .channel('ordenes-cambios')
+    .channel(nombreCanal)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'ordenes', filter: `empresa_id=eq.${empresaActivaId()}` },

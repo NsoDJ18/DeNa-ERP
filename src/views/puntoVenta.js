@@ -2,6 +2,7 @@ import { listarProductos } from '../data/productos.js';
 import { listarClientes } from '../data/clientes.js';
 import { listarVentasDeHoy, registrarVenta, kpisDelDia } from '../data/ventasMostrador.js';
 import { listarAbonosDelDia } from '../data/ordenes.js';
+import { cargarTurnosDelDia, turnoAbiertoVigente } from '../data/turnos.js';
 import { escapeHtml, money, todayStr, toast } from '../lib/util.js';
 
 let carrito = [];
@@ -13,6 +14,8 @@ export async function renderPuntoVenta(contenedor) {
       <h2>Punto de venta</h2>
       <p class="subtitulo">Para productos de mostrador que no son un pedido personalizado</p>
     </div>
+
+    <div id="pv-turno-info"></div>
 
     <div class="grid-2" style="align-items:start;">
       <div class="tarjeta">
@@ -60,6 +63,21 @@ export async function renderPuntoVenta(contenedor) {
   `;
 
   const [productos, clientes] = await Promise.all([listarProductos(), listarClientes()]);
+
+  const turnos = await cargarTurnosDelDia(todayStr());
+  const turnoVigente = turnoAbiertoVigente(turnos);
+  const turnoInfoEl = document.getElementById('pv-turno-info');
+  if (turnoVigente) {
+    turnoInfoEl.innerHTML = `<div class="banda-alerta rojo" style="background:#E3EDE6;border-color:#C9DFCF;">
+      <h4 style="color:#2E5C42;">🟢 Turno abierto: ${escapeHtml(turnoVigente.responsable)}</h4>
+    </div>`;
+    document.getElementById('pv-responsable').value = turnoVigente.responsable;
+  } else {
+    turnoInfoEl.innerHTML = `<div class="banda-alerta rojo" style="background:#F6EBD6;border-color:#E9D4A0;">
+      <h4 style="color:#8A6A22;">🟡 No hay un turno abierto</h4>
+      <p style="margin:0;color:#8A6A22;font-size:13px;">Abre uno en "Ventas" antes de vender, para que la caja cuadre bien al cerrar.</p>
+    </div>`;
+  }
 
   const selectProducto = document.getElementById('pv-producto');
   selectProducto.innerHTML = '<option value="">— Otro / producto sin bodega —</option>' +

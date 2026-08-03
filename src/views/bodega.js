@@ -30,6 +30,13 @@ export async function renderBodega(contenedor) {
       </div>
     </div>
 
+    <div class="tarjeta" style="margin-bottom:22px;">
+      <h3 style="margin-top:0;">Importar productos desde un archivo CSV</h3>
+      <p class="subtitulo" style="margin-bottom:12px;">Sirve para traer tu inventario desde Excel, Bsale, Defontana u otro sistema — exporta a CSV desde ahí y súbelo acá. Columnas esperadas: <b>sku, nombre, categoria, stock, stock_minimo, precio_costo, precio_venta</b> (solo "nombre" y "precio_venta" son obligatorias).</p>
+      <input type="file" id="csv-archivo" accept=".csv">
+      <div id="csv-resultado" style="margin-top:10px;"></div>
+    </div>
+
     <div class="tabla-wrap">
       <table class="tabla">
         <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>Venta</th><th>Ajustar</th><th></th></tr></thead>
@@ -75,20 +82,86 @@ export async function renderBodega(contenedor) {
 
   await pintar();
   const cancelarSuscripcion = suscribirseAProductos(() => pintar());
+
+  document.getElementById('csv-archivo').onchange = async (ev) => {
+    const archivo = ev.target.files?.[0];
+    if (!archivo) return;
+    const resultadoEl = document.getElementById('csv-resultado');
+    resultadoEl.innerHTML = '<span style="color:var(--ink-soft);font-size:13px;">Leyendo archivo…</span>';
+    try {
+      const texto = await archivo.text();
+      const filas = parsearCSV(texto);
+      if (!filas.length) throw new Error('El archivo está vacío o no tiene el formato esperado.');
+
+      let creados = 0, omitidos = 0;
+      for (const fila of filas) {
+        const nombre = (fila.nombre || '').trim();
+        const precioVenta = Number(fila.precio_venta);
+        if (!nombre || isNaN(precioVenta)) { omitidos++; continue; }
+        try {
+          await crearProducto({
+            nombre,
+            sku: (fila.sku || '').trim(),
+            categoria: (fila.categoria || '').trim(),
+            stock: Number(fila.stock) || 0,
+            stock_minimo: Number(fila.stock_minimo) || 0,
+            precio_costo: Number(fila.precio_costo) || 0,
+            precio_venta: precioVenta,
+          });
+          creados++;
+        } catch (e) { omitidos++; }
+      }
+      resultadoEl.innerHTML = `<span style="color:#2E5C42;font-size:13px;font-weight:600;">✓ ${creados} productos importados${omitidos ? `, ${omitidos} omitidos (SKU repetido o datos incompletos)` : ''}.</span>`;
+      ev.target.value = '';
+      await pintar();
+    } catch (e) {
+      console.error(e);
+      resultadoEl.innerHTML = `<span style="color:#9B2C2C;font-size:13px;">No se pudo importar: ${e.message}</span>`;
+    }
+  };
+
   return cancelarSuscripcion;
 
+  /** Parser de CSV simple: primera fila = encabezados, admite comas dentro de comillas. */
+  function parsearCSV(texto) {
+    const lineas = texto.split(/\r?\n/).filter((l) => l.trim());
+    if (lineas.length < 2) return [];
+    const partirLinea = (linea) => {
+      const partes = [];
+      let actual = '', dentroComillas = false;
+      for (let i = 0; i < linea.length; i++) {
+        const c = linea[i];
+        if (c === '"') dentroComillas = !dentroComillas;
+        else if (c === ',' && !dentroComillas) { partes.push(actual); actual = ''; }
+        else actual += c;
+      }
+      partes.push(actual);
+      return partes.map((p) => p.trim());
+    };
+    const encabezados = partirLinea(lineas[0]).map((h) => h.toLowerCase().replace(/\s+/g, '_'));
+    return lineas.slice(1).map((linea) => {
+      const valores = partirLinea(linea);
+      const fila = {};
+      encabezados.forEach((h, i) => { fila[h] = valores[i] || ''; });
+      return fila;
+    });
+  }
+
   async function pintar() {
+    const alertaEl = document.getElementById('bodega-alerta');
+    const tbodyEl = document.getElementById('bodega-tbody');
+    if (!alertaEl || !tbodyEl) return; // ya no estamos en esta pantalla (llegó un evento tarde de tiempo real)
     const productos = await listarProductos();
     const bajos = productos.filter((p) => p.stock <= p.stock_minimo);
 
-    document.getElementById('bodega-alerta').innerHTML = bajos.length
+    alertaEl.innerHTML = bajos.length
       ? `<div class="banda-alerta rojo" style="background:#F6EBD6;border-color:#E9D4A0;">
           <h4 style="color:#8A6A22;">🟡 ${bajos.length} producto${bajos.length === 1 ? '' : 's'} con stock bajo</h4>
           <p style="margin:0;color:#8A6A22;font-size:13px;">${bajos.map((p) => escapeHtml(p.nombre)).join(', ')}</p>
         </div>`
       : '';
 
-    const tbody = document.getElementById('bodega-tbody');
+    const tbody = tbodyEl;
     tbody.innerHTML = productos.length
       ? productos.map((p) => `
         <tr>

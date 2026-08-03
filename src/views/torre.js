@@ -29,6 +29,7 @@ export async function renderTorre(contenedor) {
   return cancelarSuscripcion;
 
   async function pintar() {
+    if (!document.getElementById('torre-kanban')) return; // ya no estamos en esta pantalla
     const [ordenes, tmax] = await Promise.all([listarOrdenes(), obtenerTiemposMax()]);
 
     const noRetirados = ordenes.filter((o) => o.estado === 'no_retirado');

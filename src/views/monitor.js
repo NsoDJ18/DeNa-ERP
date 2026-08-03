@@ -81,6 +81,7 @@ export async function renderMonitor(contenedor) {
   }
 
   async function pintar() {
+    if (!document.getElementById('mon-body')) return; // ya no estamos en esta pantalla
     const [ordenes, tmax] = await Promise.all([listarOrdenes(), obtenerTiemposMax()]);
 
     const noRetirados = ordenes.filter((o) => o.estado === 'no_retirado');

@@ -44,6 +44,7 @@ export async function renderEstado(contenedor) {
   return cancelarSuscripcion;
 
   async function pintar() {
+    if (!document.getElementById('estado-resultados')) return; // ya no estamos en esta pantalla
     ordenesCache = await listarOrdenes();
     const q = document.getElementById('estado-buscar').value.trim().toLowerCase();
     let lista = ordenesCache;

@@ -340,3 +340,9 @@ body.modo-etiqueta #etiqueta-imprimible{ display:block; }
 @keyframes pulso{ 0%,100%{ box-shadow:0 0 0 4px var(--bg-soft),0 0 0 rgba(194,86,79,.5); } 50%{ box-shadow:0 0 0 4px var(--bg-soft),0 0 14px rgba(194,86,79,.85); } }
 .monitor-vacio{ text-align:center;padding:60px 20px;color:var(--ink-soft);font-size:14px; }
 @media(max-width:700px){ .monitor-fila-info,.monitor-track-spacer{ width:150px; } }
+
+/* ===================== Hoy ===================== */
+.grid-hoy{ display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px; }
+.panel-hoy{ background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow); }
+.panel-hoy h3{ margin:0 0 12px;font-size:14px;color:var(--navy); }
+.panel-hoy .fila-clickable{ padding:10px 12px; }

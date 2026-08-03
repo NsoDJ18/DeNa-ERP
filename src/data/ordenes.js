@@ -90,6 +90,32 @@ export async function cambiarEstadoOrden(ordenId, nuevoEstado) {
   return data;
 }
 
+/** Cierra la orden como entregada, registrando el pago del saldo si corresponde
+ *  (esto es lo que hace que el "efectivo esperado" del turno cuadre bien). */
+export async function entregarConPago(ordenId, monto, metodo) {
+  const { data: actual, error: errLectura } = await supabase
+    .from('ordenes').select('pagos, abono, timestamps, historial').eq('id', ordenId).single();
+  if (errLectura) throw errLectura;
+
+  const ahora = new Date().toISOString();
+  const pagos = [...(actual.pagos || [])];
+  if (monto > 0) pagos.push({ monto, metodo, fecha: ahora });
+  const historial = [...(actual.historial || []), {
+    texto: monto > 0 ? `Pago de saldo registrado al entregar: ${metodo} $${monto}.` : 'Orden entregada (sin saldo pendiente).',
+    fecha: ahora,
+  }];
+
+  const { data, error } = await supabase.from('ordenes').update({
+    estado: 'entregado',
+    abono: (actual.abono || 0) + monto,
+    pagos,
+    timestamps: { ...actual.timestamps, entregado: ahora },
+    historial,
+  }).eq('id', ordenId).select().single();
+  if (error) throw error;
+  return data;
+}
+
 /** Elimina (archiva) una orden cancelada — no borra el dato, solo la saca de la vista activa. */
 export async function archivarOrden(ordenId) {
   const { data, error } = await supabase
@@ -98,6 +124,25 @@ export async function archivarOrden(ordenId) {
     .eq('id', ordenId)
     .select()
     .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Nota de crédito: reduce el precio de una orden ya facturada, dejando
+ *  registro del motivo. Requiere ser encargado o admin — el candado real
+ *  está en un trigger de la base de datos, esto es solo la llamada. */
+export async function aplicarNotaCredito(ordenId, nuevoPrecio, motivo) {
+  const { data: actual, error: errLectura } = await supabase
+    .from('ordenes').select('precio, historial').eq('id', ordenId).single();
+  if (errLectura) throw errLectura;
+
+  const ahora = new Date().toISOString();
+  const historial = [...(actual.historial || []), {
+    texto: `[Nota de crédito] Precio ajustado de $${actual.precio} a $${nuevoPrecio}. Motivo: ${motivo}`,
+    fecha: ahora,
+  }];
+  const { data, error } = await supabase.from('ordenes')
+    .update({ precio: nuevoPrecio, historial }).eq('id', ordenId).select().single();
   if (error) throw error;
   return data;
 }

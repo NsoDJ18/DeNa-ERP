@@ -27,7 +27,7 @@ create table empresas (
 create table usuarios_empresas (
   usuario_id    uuid references auth.users(id) on delete cascade,
   empresa_id    uuid references empresas(id) on delete cascade,
-  rol           text not null check (rol in ('admin','trabajador')),
+  rol           text not null check (rol in ('admin','encargado','trabajador')),
   nombre_mostrar text,                         -- nombre visible (para "responsable" en OT, turnos, etc.)
   creado_en     timestamptz default now(),
   primary key (usuario_id, empresa_id)
@@ -37,6 +37,17 @@ create table usuarios_empresas (
 create or replace function empresas_del_usuario()
 returns setof uuid as $$
   select empresa_id from usuarios_empresas where usuario_id = auth.uid();
+$$ language sql stable security definer;
+
+-- Función helper: ¿el usuario autenticado es admin de esta empresa?
+-- security definer para evitar que la política que la usa se referencie
+-- a sí misma (RLS recursiva) al consultar usuarios_empresas.
+create or replace function es_admin_de(p_empresa_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from usuarios_empresas
+    where usuario_id = auth.uid() and empresa_id = p_empresa_id and rol = 'admin'
+  );
 $$ language sql stable security definer;
 
 
@@ -71,6 +82,27 @@ create table ordenes (
 create index idx_ordenes_empresa on ordenes(empresa_id);
 create index idx_ordenes_estado on ordenes(empresa_id, estado);
 
+-- Nota de crédito real: nadie sin autorización puede bajar el precio de un
+-- pedido, aunque llame la API directo. Subir el precio (corregir un error
+-- hacia arriba) sigue permitido para cualquiera, solo se protege la baja.
+create or replace function bloquear_baja_precio_sin_autorizacion()
+returns trigger as $$
+begin
+  if new.precio < old.precio and not exists (
+    select 1 from usuarios_empresas
+    where usuario_id = auth.uid() and empresa_id = new.empresa_id and rol in ('admin','encargado')
+  )
+  then
+    raise exception 'Solo un encargado de turno o administrador puede aplicar una nota de crédito.';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger trg_bloquear_baja_precio
+  before update on ordenes
+  for each row execute function bloquear_baja_precio_sin_autorizacion();
+
 -- ---------- 4. BODEGA (productos de mostrador) ----------
 create table productos (
   id            uuid primary key default gen_random_uuid(),
@@ -85,6 +117,29 @@ create table productos (
   activo        boolean default true
 );
 create index idx_productos_empresa on productos(empresa_id);
+
+-- Aunque el botón de editar precio esté oculto en el frontend para un
+-- trabajador común, esto es lo que realmente lo impide: sin este trigger,
+-- alguien podría cambiar el precio llamando la API directo, saltándose la
+-- interfaz. El ajuste de stock (+1/-1) sigue permitido para cualquier rol.
+create or replace function bloquear_cambio_precio_sin_autorizacion()
+returns trigger as $$
+begin
+  if (new.precio_venta is distinct from old.precio_venta or new.precio_costo is distinct from old.precio_costo)
+     and not exists (
+       select 1 from usuarios_empresas
+       where usuario_id = auth.uid() and empresa_id = new.empresa_id and rol in ('admin','encargado')
+     )
+  then
+    raise exception 'Solo un encargado de turno o administrador puede cambiar el precio de un producto.';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger trg_bloquear_cambio_precio
+  before update on productos
+  for each row execute function bloquear_cambio_precio_sin_autorizacion();
 
 -- ---------- 5. VENTAS DE MOSTRADOR (punto de venta) ----------
 create table ventas (
@@ -191,6 +246,12 @@ create policy tenant_isolation on empleados for all
 -- usuarios_empresas: cada usuario solo ve sus propias membresías
 create policy propia_membresia on usuarios_empresas for select
   using (usuario_id = auth.uid());
+
+-- un admin puede ver y editar el rol de todo su equipo (para asignar jerarquías)
+create policy admin_ve_su_equipo on usuarios_empresas for select
+  using (es_admin_de(empresa_id));
+create policy admin_edita_roles on usuarios_empresas for update
+  using (es_admin_de(empresa_id));
 
 -- empresas: un usuario puede ver (y un admin editar) solo las empresas
 -- a las que pertenece — sin esto, RLS bloquea todo por defecto y el

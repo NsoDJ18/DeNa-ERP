@@ -91,5 +91,23 @@ export async function resolverEmpresaActiva() {
   const guardada = empresaActivaId();
   const activa = empresas.find((e) => e.id === guardada) || empresas[0];
   fijarEmpresaActiva(activa.id);
+  _rolActivo = activa.rol;
   return { empresas, activa };
+}
+
+// ============================================================
+// ROL ACTIVO (caché en memoria, se fija cada vez que se resuelve la empresa)
+// ============================================================
+// Evita tener que pasar "activa.rol" a mano por cada función — cualquier
+// módulo puede preguntar "¿puedo hacer esto?" sin necesitar el objeto
+// completo. Solo es una ayuda de UI: la seguridad real siempre vive en las
+// políticas RLS / triggers de la base de datos, no acá.
+let _rolActivo = null;
+
+export function rolActivo() {
+  return _rolActivo;
+}
+
+export function puedeAutorizar() {
+  return _rolActivo === 'admin' || _rolActivo === 'encargado';
 }

@@ -35,6 +35,11 @@ export async function ajustarStock(productoId, delta) {
   return data;
 }
 
+export async function editarPrecioVenta(productoId, nuevoPrecio) {
+  const { error } = await supabase.from('productos').update({ precio_venta: nuevoPrecio }).eq('id', productoId);
+  if (error) throw error;
+}
+
 /** "Elimina" el producto (lo desactiva) — no borra el historial de ventas que lo referencian. */
 export async function eliminarProducto(productoId) {
   const { error } = await supabase.from('productos').update({ activo: false }).eq('id', productoId);

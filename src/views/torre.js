@@ -1,5 +1,6 @@
 import { listarOrdenes, cambiarEstadoOrden, suscribirseAOrdenes } from '../data/ordenes.js';
 import { obtenerTiemposMax } from '../data/configuracion.js';
+import { confirmarEntrega } from '../lib/entrega.js';
 import { escapeHtml, toast } from '../lib/util.js';
 
 const ESTACIONES = [
@@ -59,7 +60,10 @@ export async function renderTorre(contenedor) {
       btn.onclick = () => avanzar(btn.dataset.avanzar, btn.dataset.siguiente);
     });
     kanban.querySelectorAll('[data-entregar]').forEach((btn) => {
-      btn.onclick = () => cerrarEntregado(btn.dataset.entregar);
+      btn.onclick = () => {
+        const orden = ordenes.find((o) => o.id === btn.dataset.entregar);
+        if (orden) confirmarEntrega(orden, pintar);
+      };
     });
   }
 
@@ -97,14 +101,4 @@ export async function renderTorre(contenedor) {
     }
   }
 
-  async function cerrarEntregado(ordenId) {
-    try {
-      await cambiarEstadoOrden(ordenId, 'entregado');
-      toast('Pedido cerrado como entregado');
-      await pintar();
-    } catch (e) {
-      console.error(e);
-      toast('No se pudo cerrar el pedido');
-    }
-  }
 }

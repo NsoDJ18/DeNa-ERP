@@ -1,6 +1,7 @@
 import { listarOrdenes, archivarOrden, restaurarOrden } from '../data/ordenes.js';
 import { abrirDetalle, badge } from './estado.js';
 import { listarEmpleados, agregarEmpleado, eliminarEmpleado } from '../data/empleados.js';
+import { listarEquipo, cambiarRolMiembro, invitarMiembro } from '../data/equipo.js';
 import { obtenerTiemposMax, guardarTiemposMax, guardarSucursal } from '../data/configuracion.js';
 import { escapeHtml, money, fdate, fdatetime, localDateStr, toast } from '../lib/util.js';
 
@@ -19,6 +20,7 @@ export async function renderAdmin(contenedor, activa) {
     <div class="encabezado-vista"><h2>Administración</h2><p class="subtitulo">Todos los pedidos del taller</p></div>
     <div class="botones-sub" id="admin-subnav">
       <button data-sec="resumen" class="activo">📊 Resumen</button>
+      <button data-sec="equipo">🧑‍💼 Equipo</button>
       <button data-sec="empleados">👥 Empleados</button>
       <button data-sec="configuracion">⚙️ Configuración</button>
     </div>
@@ -34,6 +36,7 @@ export async function renderAdmin(contenedor, activa) {
   async function pintarSeccion() {
     const cont = document.getElementById('admin-contenido');
     if (seccionActual === 'resumen') return pintarResumen(cont);
+    if (seccionActual === 'equipo') return pintarEquipo(cont);
     if (seccionActual === 'empleados') return pintarEmpleados(cont);
     if (seccionActual === 'configuracion') return pintarConfiguracion(cont, activa);
   }
@@ -56,8 +59,15 @@ async function pintarResumen(cont) {
   const ingresos = facturables.reduce((s, o) => s + (o.precio || 0), 0);
   const saldo = facturables.reduce((s, o) => s + ((o.precio || 0) - (o.abono || 0)), 0);
   const ticketProm = facturables.length ? ingresos / facturables.length : 0;
+  const conSaldo = facturables.filter((o) => (o.precio || 0) - (o.abono || 0) > 0);
 
   cont.innerHTML = `
+    ${conSaldo.length ? `
+    <div class="banda-alerta rojo" style="background:#F6EBD6;border-color:#E9D4A0;">
+      <h4 style="color:#8A6A22;">🟡 ${conSaldo.length} pedido${conSaldo.length === 1 ? '' : 's'} con saldo por cobrar (${money(saldo)} en total)</h4>
+      ${conSaldo.map((o) => `<div class="fila-resultado" style="color:#8A6A22;"><span class="mono">${o.folio}</span> ${escapeHtml(o.cliente)} — debe ${money((o.precio || 0) - (o.abono || 0))}</div>`).join('')}
+    </div>` : ''}
+
     <div class="stats">
       <div class="stat"><div class="stat-etiqueta">Total pedidos</div><div class="stat-valor">${total}</div></div>
       <div class="stat"><div class="stat-etiqueta">En proceso</div><div class="stat-valor">${enProceso}</div></div>
@@ -157,6 +167,91 @@ async function pintarResumen(cont) {
 // ============================================================
 // EMPLEADOS
 // ============================================================
+// ============================================================
+// EQUIPO: jerarquías (admin / encargado de turno / trabajador)
+// ============================================================
+async function pintarEquipo(cont) {
+  cont.innerHTML = `
+    <div class="tarjeta" style="max-width:560px;margin-bottom:22px;">
+      <h3 style="margin-top:0;">Vincular a alguien nuevo</h3>
+      <p class="subtitulo" style="margin-bottom:14px;">
+        La persona debe registrarse primero por su cuenta desde la pantalla de login
+        (correo propio). Una vez que lo haga, la vinculas acá por su correo.
+      </p>
+      <div class="campo"><label>Correo con el que se registró</label><input type="email" id="inv-email" placeholder="persona@correo.com"></div>
+      <div class="grid-2">
+        <div class="campo"><label>Nombre a mostrar</label><input type="text" id="inv-nombre" placeholder="Ej: Camila Fuentes"></div>
+        <div class="campo"><label>Jerarquía</label>
+          <select id="inv-rol">
+            <option value="trabajador">Trabajador</option>
+            <option value="encargado">Encargado de turno</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+      </div>
+      <div class="error" id="inv-error"></div>
+      <button class="boton boton-oro" id="btn-invitar" style="width:auto;padding:9px 20px;">Vincular a mi empresa</button>
+    </div>
+
+    <div class="tarjeta" style="max-width:560px;">
+      <h3 style="margin-top:0;">Jerarquía del equipo</h3>
+      <p class="subtitulo" style="margin-bottom:14px;">
+        <b>Trabajador</b>: uso normal del sistema. <b>Encargado de turno</b>: además puede
+        cambiar precios y anular productos en Bodega, y aplicar notas de crédito.
+        <b>Administrador</b>: acceso total.
+      </p>
+      <div id="equipo-lista"></div>
+    </div>
+  `;
+  await pintarLista();
+
+  document.getElementById('btn-invitar').onclick = async (ev) => {
+    const errBox = document.getElementById('inv-error');
+    errBox.classList.remove('visible');
+    const email = document.getElementById('inv-email').value.trim();
+    const nombre = document.getElementById('inv-nombre').value.trim();
+    const rol = document.getElementById('inv-rol').value;
+    if (!email || !nombre) { errBox.textContent = 'Completa el correo y el nombre a mostrar.'; errBox.classList.add('visible'); return; }
+
+    ev.target.disabled = true; ev.target.textContent = 'Vinculando…';
+    try {
+      await invitarMiembro(email, rol, nombre);
+      toast(`${nombre} vinculado como ${rol}`);
+      document.getElementById('inv-email').value = '';
+      document.getElementById('inv-nombre').value = '';
+      await pintarLista();
+    } catch (e) {
+      console.error(e);
+      errBox.textContent = e.message || 'No se pudo vincular a esa persona.';
+      errBox.classList.add('visible');
+    } finally {
+      ev.target.disabled = false; ev.target.textContent = 'Vincular a mi empresa';
+    }
+  };
+
+  async function pintarLista() {
+    const equipo = await listarEquipo();
+    document.getElementById('equipo-lista').innerHTML = equipo.length
+      ? equipo.map((m) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dotted var(--line);gap:10px;">
+          <span style="font-size:13.5px;">${escapeHtml(m.nombre_mostrar) || '(sin nombre configurado)'}</span>
+          <select data-rol-de="${m.usuario_id}" style="font-family:inherit;font-size:12.5px;padding:6px 8px;border-radius:7px;border:1px solid var(--line);">
+            <option value="trabajador" ${m.rol === 'trabajador' ? 'selected' : ''}>Trabajador</option>
+            <option value="encargado" ${m.rol === 'encargado' ? 'selected' : ''}>Encargado de turno</option>
+            <option value="admin" ${m.rol === 'admin' ? 'selected' : ''}>Administrador</option>
+          </select>
+        </div>`).join('')
+      : `<div class="vacio" style="padding:14px;">Aún no hay nadie más vinculado a esta empresa.</div>`;
+
+    document.querySelectorAll('[data-rol-de]').forEach((sel) => {
+      sel.onchange = async () => {
+        try { await cambiarRolMiembro(sel.dataset.rolDe, sel.value); toast('Jerarquía actualizada'); }
+        catch (e) { console.error(e); toast('No se pudo cambiar el rol'); await pintarLista(); }
+      };
+    });
+  }
+}
+
 async function pintarEmpleados(cont) {
   cont.innerHTML = `
     <div class="tarjeta" style="max-width:480px;">

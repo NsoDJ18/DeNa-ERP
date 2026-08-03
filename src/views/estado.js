@@ -1,4 +1,6 @@
-import { listarOrdenes, obtenerOrden, cambiarEstadoOrden, agregarNota, suscribirseAOrdenes } from '../data/ordenes.js';
+import { listarOrdenes, obtenerOrden, cambiarEstadoOrden, agregarNota, aplicarNotaCredito, suscribirseAOrdenes } from '../data/ordenes.js';
+import { confirmarEntrega } from '../lib/entrega.js';
+import { puedeAutorizar } from '../auth/session.js';
 import { escapeHtml, fdate, fdatetime, todayStr, toast } from '../lib/util.js';
 import { abrirModal, cerrarModal } from '../lib/modal.js';
 
@@ -156,6 +158,16 @@ function pintarDetalle(o) {
     </div>
     <div style="margin-bottom:16px;"><span class="mini-label">Descripción</span><div>${escapeHtml(o.descripcion)}</div></div>
 
+    ${puedeAutorizar() && o.estado !== 'cancelado' ? `
+    <div class="campo" id="nc-wrap" style="background:var(--bg-soft);border-radius:10px;padding:12px;">
+      <label style="margin-bottom:8px;">🧾 Nota de crédito (encargado/admin)</label>
+      <div class="grid-2">
+        <div class="campo"><label>Nuevo precio total</label><input type="number" id="nc-precio" min="0" value="${o.precio || 0}"></div>
+        <div class="campo"><label>Motivo *</label><input type="text" id="nc-motivo" placeholder="Ej: producto con defecto"></div>
+      </div>
+      <button class="boton boton-ghost" id="btn-nota-credito" style="width:auto;padding:8px 16px;">Aplicar nota de crédito</button>
+    </div>` : ''}
+
     <div class="campo"><label>Agregar nota interna</label><textarea id="detalle-nota" placeholder="Ej: cliente confirmó color..."></textarea></div>
     ${notas.length ? `<div style="margin-bottom:14px;">${notas.map((n) => `<div style="font-size:12.5px;color:var(--ink-soft);padding:6px 0;border-bottom:1px dotted var(--line);"><b style="color:var(--ink);">${fdate(n.fecha)}:</b> ${escapeHtml(n.texto)}</div>`).join('')}</div>` : ''}
 
@@ -177,12 +189,35 @@ function pintarDetalle(o) {
     const actualizado = await obtenerOrden(o.id);
     pintarDetalle(actualizado);
   };
+  const btnNotaCredito = document.getElementById('btn-nota-credito');
+  if (btnNotaCredito) btnNotaCredito.onclick = async (ev) => {
+    const nuevoPrecio = Number(document.getElementById('nc-precio').value);
+    const motivo = document.getElementById('nc-motivo').value.trim();
+    if (isNaN(nuevoPrecio) || nuevoPrecio < 0) { toast('Precio inválido'); return; }
+    if (nuevoPrecio > (o.precio || 0)) { toast('Una nota de crédito solo puede bajar el precio, no subirlo'); return; }
+    if (!motivo) { toast('Escribe el motivo de la nota de crédito'); return; }
+    ev.target.disabled = true;
+    try {
+      await aplicarNotaCredito(o.id, nuevoPrecio, motivo);
+      toast('Nota de crédito aplicada');
+      const actualizado = await obtenerOrden(o.id);
+      pintarDetalle(actualizado);
+    } catch (e) {
+      console.error(e);
+      toast('No se pudo aplicar la nota de crédito: ' + (e.message || ''));
+    } finally {
+      ev.target.disabled = false;
+    }
+  };
   const btnCancelar = document.getElementById('btn-cancelar');
   if (btnCancelar) btnCancelar.onclick = () => cambiar('cancelado');
   const btnAvanzar = document.getElementById('btn-avanzar');
   if (btnAvanzar) btnAvanzar.onclick = () => cambiar(ESTACIONES[idx + 1].key);
   const btnEntregar = document.getElementById('btn-entregar');
-  if (btnEntregar) btnEntregar.onclick = () => cambiar('entregado');
+  if (btnEntregar) btnEntregar.onclick = () => confirmarEntrega(o, async () => {
+    const actualizado = await obtenerOrden(o.id);
+    pintarDetalle(actualizado);
+  });
 
   async function cambiar(nuevoEstado) {
     try {

@@ -11,6 +11,7 @@ import { registrarRuta, iniciarRouter, configurarControlAcceso } from './router.
 import { renderRecepcion } from './views/recepcion.js';
 import { renderTorre } from './views/torre.js';
 import { renderEstado } from './views/estado.js';
+import { renderHoy } from './views/hoy.js';
 import { renderBodega } from './views/bodega.js';
 import { renderVentas } from './views/ventas.js';
 import { renderPuntoVenta } from './views/puntoVenta.js';
@@ -21,7 +22,7 @@ import { tieneFuncion } from './planes.js';
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
 registrarRuta('torre', renderTorre, 'torre');
 registrarRuta('estado', renderEstado, 'estado');
-registrarRuta('bodega', renderBodega, 'bodega');
+registrarRuta('hoy', renderHoy, 'hoy');
 registrarRuta('ventas', renderVentas, 'ventas');
 registrarRuta('punto_venta', renderPuntoVenta, 'punto_venta');
 registrarRuta('monitor', renderMonitor, 'monitor');
@@ -29,6 +30,7 @@ registrarRuta('monitor', renderMonitor, 'monitor');
 const NAV = [
   { ruta: 'recepcion', etiqueta: 'Recepción', funcion: 'recepcion' },
   { ruta: 'estado', etiqueta: 'Estado', funcion: 'estado' },
+  { ruta: 'hoy', etiqueta: '🗓️ Hoy', funcion: 'hoy' },
   { ruta: 'torre', etiqueta: 'Torre de control', funcion: 'torre' },
   { ruta: 'bodega', etiqueta: 'Bodega', funcion: 'bodega' },
   { ruta: 'ventas', etiqueta: 'Ventas', funcion: 'ventas' },
@@ -160,6 +162,7 @@ function renderAppShell(sesion, activa) {
   });
   document.getElementById('btn-salir').onclick = async () => { await cerrarSesion(); };
 
+  registrarRuta('bodega', (contenedor) => renderBodega(contenedor, activa), 'bodega');
   registrarRuta('admin', (contenedor) => renderAdmin(contenedor, activa), 'admin_resumen');
   configurarControlAcceso((funcion) => tieneFuncion(activa.plan, funcion));
   iniciarRouter();

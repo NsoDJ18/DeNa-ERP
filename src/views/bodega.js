@@ -1,7 +1,8 @@
-import { listarProductos, crearProducto, ajustarStock, eliminarProducto, suscribirseAProductos } from '../data/productos.js';
+import { listarProductos, crearProducto, ajustarStock, editarPrecioVenta, eliminarProducto, suscribirseAProductos } from '../data/productos.js';
 import { escapeHtml, money, toast } from '../lib/util.js';
 
-export async function renderBodega(contenedor) {
+export async function renderBodega(contenedor, activa) {
+  const puedeAutorizarCambios = activa?.rol === 'admin' || activa?.rol === 'encargado';
   contenedor.innerHTML = `
     <div class="encabezado-vista">
       <h2>Bodega</h2>
@@ -170,14 +171,19 @@ export async function renderBodega(contenedor) {
           <td>${escapeHtml(p.categoria) || '—'}</td>
           <td style="${p.stock <= p.stock_minimo ? 'color:#8A6A22;font-weight:700;' : ''}">${p.stock}</td>
           <td>${money(p.precio_costo)}</td>
-          <td>${money(p.precio_venta)}</td>
+          <td>
+            ${money(p.precio_venta)}
+            ${puedeAutorizarCambios ? `<button class="mini-boton" data-editar-precio="${p.id}" data-precio-actual="${p.precio_venta}" style="margin-left:6px;">✏️</button>` : ''}
+          </td>
           <td>
             <div style="display:flex;gap:5px;">
               <button class="mini-boton" data-ajustar="${p.id}" data-delta="-1">−1</button>
               <button class="mini-boton" data-ajustar="${p.id}" data-delta="1">+1</button>
             </div>
           </td>
-          <td><button class="mini-boton" data-eliminar="${p.id}">Eliminar</button></td>
+          <td>${puedeAutorizarCambios
+            ? `<button class="mini-boton" data-eliminar="${p.id}">Eliminar</button>`
+            : `<span style="font-size:11px;color:var(--ink-soft);" title="Solo un encargado de turno o administrador puede eliminar productos">🔒</span>`}</td>
         </tr>`).join('')
       : `<tr><td colspan="8"><div class="vacio"><b>Bodega vacía</b>Agrega tu primer producto arriba.</div></td></tr>`;
 
@@ -185,6 +191,16 @@ export async function renderBodega(contenedor) {
       btn.onclick = async () => {
         try { await ajustarStock(btn.dataset.ajustar, Number(btn.dataset.delta)); await pintar(); }
         catch (e) { console.error(e); toast('No se pudo ajustar el stock'); }
+      };
+    });
+    tbody.querySelectorAll('[data-editar-precio]').forEach((btn) => {
+      btn.onclick = async () => {
+        const nuevo = prompt('Nuevo precio de venta:', btn.dataset.precioActual);
+        if (nuevo === null) return;
+        const num = Number(nuevo);
+        if (isNaN(num) || num < 0) { toast('Precio inválido'); return; }
+        try { await editarPrecioVenta(btn.dataset.editarPrecio, num); toast('Precio actualizado'); await pintar(); }
+        catch (e) { console.error(e); toast('No se pudo actualizar el precio'); }
       };
     });
     tbody.querySelectorAll('[data-eliminar]').forEach((btn) => {

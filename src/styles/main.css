@@ -9,6 +9,12 @@
   --bg-soft:#F7F8FA;
   --radius:14px;
   --shadow:0 4px 18px rgba(15,27,54,0.08);
+  /* Colores para texto que queda "suelto" sobre el fondo oscuro de la app
+     (fuera de tarjetas blancas) — nunca uses --ink/--ink-soft ahí, son
+     oscuros y quedan invisibles sobre el fondo. */
+  --claro:#F2EDE7;
+  --claro-soft:#C7C2BA;
+  --rojo-acento:#E58D82;
 }
 *{box-sizing:border-box;}
 body{
@@ -147,20 +153,23 @@ body{
   padding:7px 13px;border-radius:999px;cursor:pointer;
 }
 .nav-boton.activo{ background:var(--navy);border-color:var(--navy);color:#fff; }
-.app-contenido{ max-width:1100px;margin:0 auto;padding:24px 20px 60px; }
+.app-contenido{ max-width:1100px;margin:0 auto;padding:24px 20px 60px;color:var(--claro); }
 
 /* ===================== formularios / tarjetas ===================== */
 .encabezado-vista{ margin-bottom:18px; }
-.encabezado-vista h2{ font-size:20px;color:var(--navy);margin:0 0 2px; }
-.subtitulo{ font-size:13px;color:var(--ink-soft);margin:0; }
+.encabezado-vista h2{ font-size:20px;color:var(--rojo-acento);margin:0 0 2px; }
+.subtitulo{ font-size:13px;color:var(--claro-soft);margin:0; }
 .tarjeta{
   background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);
-  padding:20px;box-shadow:var(--shadow);
+  padding:20px;box-shadow:var(--shadow);color:var(--ink);
 }
+.tarjeta h3{ color:var(--navy); }
+.tarjeta .subtitulo{ color:var(--ink-soft); }
 .grid-2{ display:grid;grid-template-columns:1fr 1fr;gap:14px; }
 @media(max-width:600px){ .grid-2{ grid-template-columns:1fr; } }
 .campo{ display:flex;flex-direction:column;gap:5px;margin-bottom:14px; }
-.campo label{ font-size:12px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em; }
+.campo label{ font-size:12px;font-weight:600;color:var(--claro-soft);text-transform:uppercase;letter-spacing:.04em; }
+.tarjeta .campo label{ color:var(--ink-soft); }
 .campo input, .campo select, .campo textarea{
   font-family:inherit;font-size:14px;padding:10px 12px;border-radius:9px;
   border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);outline:none;
@@ -281,10 +290,28 @@ table.tabla tr:last-child td{ border-bottom:none; }
 /* ===================== sub-navegación (Administración) ===================== */
 .botones-sub{ display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px; }
 .botones-sub button{
-  font-family:inherit;font-size:13px;font-weight:600;background:none;border:1px solid var(--line);
-  color:var(--ink-soft);padding:7px 14px;border-radius:999px;cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:600;background:none;border:1px solid var(--claro-soft);
+  color:var(--claro-soft);padding:7px 14px;border-radius:999px;cursor:pointer;
 }
 .botones-sub button.activo{ background:var(--navy);border-color:var(--navy);color:#fff; }
+
+/* ===================== ticket de recepción ===================== */
+.ticket{ background:var(--bg);border-radius:var(--radius);max-width:420px;margin:0 auto;overflow:hidden;box-shadow:var(--shadow); }
+.ticket-top{ background:var(--navy);color:#fff;padding:16px 20px; }
+.ticket-etiqueta{ font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.85; }
+.ticket-folio{ font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700; }
+.ticket-perforado{ position:relative;height:0;border-top:2px dashed rgba(0,0,0,.12);margin:0 16px; }
+.ticket-perforado::before,.ticket-perforado::after{ content:'';position:absolute;top:-11px;width:22px;height:22px;background:var(--bg-soft);border-radius:50%; }
+.ticket-perforado::before{ left:-27px; } .ticket-perforado::after{ right:-27px; }
+.ticket-cuerpo{ padding:18px 20px 20px; }
+.ticket-fila{ display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px dotted var(--line);color:var(--ink); }
+.ticket-fila span:first-child{ color:var(--ink-soft); }
+.ticket-fila span:last-child{ font-weight:600;text-align:right; }
+
+/* ===================== impresión de etiqueta ===================== */
+#etiqueta-imprimible{ display:none; }
+body.modo-etiqueta #app{ display:none !important; }
+body.modo-etiqueta #etiqueta-imprimible{ display:block; }
 
 /* ===================== Monitor (pantalla TV) ===================== */
 .monitor-top{ display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px; }

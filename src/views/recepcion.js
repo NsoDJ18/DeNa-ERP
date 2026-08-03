@@ -1,6 +1,6 @@
 import { crearOrden } from '../data/ordenes.js';
 import { llenarDatalistEmpleados } from '../data/empleados.js';
-import { toast } from '../lib/util.js';
+import { toast, fdate, money, escapeHtml } from '../lib/util.js';
 
 const TIPOS_TRABAJO = [
   'Tazas personalizadas', 'Impresión DTF UV', 'Impresión digital', 'Tarjetas de presentación',
@@ -112,18 +112,88 @@ export async function renderRecepcion(contenedor) {
     document.getElementById('recepcion-form-wrap').style.display = 'none';
     const wrap = document.getElementById('recepcion-confirmacion');
     wrap.style.display = 'block';
+    const saldo = (orden.precio || 0) - (orden.abono || 0);
     wrap.innerHTML = `
-      <div class="tarjeta" style="max-width:420px;margin:0 auto;text-align:center;">
-        <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);">Orden de trabajo</div>
-        <div style="font-family:'Fraunces',serif;font-size:28px;color:var(--navy);margin:6px 0 18px;">${orden.folio}</div>
-        <p style="text-align:left;font-size:14px;color:var(--ink-soft);">
-          Cliente: <b style="color:var(--ink);">${orden.cliente}</b><br>
-          Tipo: ${orden.tipo}<br>
-          Entrega estimada: ${orden.fecha_entrega}
-        </p>
-        <button class="boton boton-oro" id="btn-otro">Registrar otro pedido</button>
+      <div class="ticket">
+        <div class="ticket-top"><div class="ticket-etiqueta">Orden de trabajo</div><div class="ticket-folio">${orden.folio}</div></div>
+        <div class="ticket-perforado"></div>
+        <div class="ticket-cuerpo">
+          <div class="ticket-fila"><span>Cliente</span><span>${escapeHtml(orden.cliente)}</span></div>
+          ${orden.rut_cliente ? `<div class="ticket-fila"><span>RUT</span><span>${escapeHtml(orden.rut_cliente)}</span></div>` : ''}
+          ${orden.telefono ? `<div class="ticket-fila"><span>Teléfono</span><span>${escapeHtml(orden.telefono)}</span></div>` : ''}
+          <div class="ticket-fila"><span>Tipo de trabajo</span><span>${escapeHtml(orden.tipo)}</span></div>
+          <div class="ticket-fila"><span>Cantidad</span><span>${orden.cantidad}</span></div>
+          <div class="ticket-fila"><span>Entrega estimada</span><span>${fdate(orden.fecha_entrega)}</span></div>
+          <div class="ticket-fila"><span>Recibido por</span><span>${escapeHtml(orden.responsable)}</span></div>
+          <div class="ticket-fila"><span>Total</span><span>${money(orden.precio)}</span></div>
+          <div class="ticket-fila"><span>Abono</span><span>${money(orden.abono)}</span></div>
+          <div class="ticket-fila"><span>Saldo</span><span>${money(saldo)}</span></div>
+          <div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">${escapeHtml(orden.descripcion)}</div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="boton boton-ghost" id="btn-pdf" style="width:auto;padding:9px 18px;">Descargar PDF (WhatsApp)</button>
+        <button class="boton boton-ghost" id="btn-etiqueta" style="width:auto;padding:9px 18px;">🏷️ Imprimir etiqueta</button>
+        <button class="boton boton-oro" id="btn-otro" style="width:auto;padding:9px 18px;">Registrar otro pedido</button>
       </div>
     `;
+
+    document.getElementById('btn-pdf').onclick = async () => {
+      const boton = document.getElementById('btn-pdf');
+      boton.disabled = true; boton.textContent = 'Generando…';
+      try {
+        const { jsPDF } = await import('jspdf'); // se descarga solo al usarlo
+        const doc = new jsPDF({ unit: 'pt', format: 'a5' });
+        let y = 40;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(15, 27, 54);
+        doc.text('DENA ERP', 40, y); y += 18;
+        doc.setFontSize(9); doc.setTextColor(120, 105, 98);
+        doc.text('Comprobante de recepción', 40, y); y += 26;
+        doc.setDrawColor(228, 211, 198); doc.line(40, y, doc.internal.pageSize.getWidth() - 40, y); y += 22;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(30, 20, 18);
+        doc.text('Orden de trabajo ' + orden.folio, 40, y); y += 22;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+        const filas = [
+          ['Cliente', orden.cliente], ['RUT', orden.rut_cliente || '—'], ['Teléfono', orden.telefono || '—'],
+          ['Tipo de trabajo', orden.tipo], ['Cantidad', String(orden.cantidad)],
+          ['Fecha de entrega estimada', fdate(orden.fecha_entrega)], ['Recibido por', orden.responsable],
+          ['Total', money(orden.precio)], ['Abono', money(orden.abono)], ['Saldo pendiente', money(saldo)],
+        ];
+        filas.forEach(([k, v]) => {
+          doc.setTextColor(120, 105, 98); doc.text(k + ':', 40, y);
+          doc.setTextColor(30, 20, 18); doc.text(String(v), 210, y);
+          y += 18;
+        });
+        y += 6;
+        doc.setTextColor(120, 105, 98); doc.text('Descripción:', 40, y); y += 16;
+        doc.setTextColor(30, 20, 18);
+        const desc = doc.splitTextToSize(orden.descripcion || '', doc.internal.pageSize.getWidth() - 80);
+        doc.text(desc, 40, y);
+        doc.save(orden.folio + '_dena_erp.pdf');
+        toast('PDF descargado, listo para enviar por WhatsApp');
+      } catch (e) {
+        console.error(e);
+        toast('No se pudo generar el PDF');
+      } finally {
+        boton.disabled = false; boton.textContent = 'Descargar PDF (WhatsApp)';
+      }
+    };
+
+    document.getElementById('btn-etiqueta').onclick = () => {
+      document.getElementById('etiqueta-imprimible').innerHTML = `
+        <div style="width:260px;padding:10px;font-family:Arial,sans-serif;color:#111;border:1px dashed #999;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;">DENA ERP</div>
+          <div style="font-size:26px;font-weight:900;margin:4px 0;">${orden.folio}</div>
+          <div style="font-size:13px;font-weight:700;">${escapeHtml(orden.cliente)}</div>
+          <div style="font-size:11px;margin-top:3px;">${escapeHtml(orden.tipo)}${orden.cantidad > 1 ? ' × ' + orden.cantidad : ''}</div>
+          <div style="font-size:11px;margin-top:3px;">Entrega: ${fdate(orden.fecha_entrega)}</div>
+        </div>`;
+      document.body.classList.add('modo-etiqueta');
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => document.body.classList.remove('modo-etiqueta'), 300);
+      }, 60);
+    };
     document.getElementById('btn-otro').onclick = () => renderRecepcion(contenedor);
   }
 }

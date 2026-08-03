@@ -63,10 +63,12 @@ export const PLANES = {
   },
 };
 
-/** ¿La empresa con este plan tiene acceso a esta función? */
+/** ¿La empresa con este plan tiene acceso a esta función?
+ *  Si el plan no es reconocido (vacío, mal escrito, dato viejo sin migrar),
+ *  se usa Bronce como piso de seguridad — así nunca se le esconden TODOS
+ *  los botones a un cliente por un dato de plan mal configurado. */
 export function tieneFuncion(plan, funcion) {
-  const config = PLANES[plan];
-  if (!config) return false; // plan desconocido = sin acceso, por seguridad
+  const config = PLANES[plan] || PLANES['bronce'];
   return config.funciones.includes(funcion);
 }
 

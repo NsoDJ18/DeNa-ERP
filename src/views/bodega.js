@@ -1,0 +1,125 @@
+import { listarProductos, crearProducto, ajustarStock, eliminarProducto, suscribirseAProductos } from '../data/productos.js';
+import { escapeHtml, money, toast } from '../lib/util.js';
+
+export async function renderBodega(contenedor) {
+  contenedor.innerHTML = `
+    <div class="encabezado-vista">
+      <h2>Bodega</h2>
+      <p class="subtitulo">Productos de mostrador — el stock baja solo cuando se registra una venta en Punto de venta</p>
+    </div>
+
+    <div id="bodega-alerta"></div>
+
+    <div class="tarjeta" style="margin-bottom:22px;">
+      <div class="grid-2">
+        <div class="campo"><label>Nombre del producto *</label><input type="text" id="p-nombre" placeholder="Ej: Llavero acrílico"></div>
+        <div class="campo"><label>Código SKU</label><input type="text" id="p-sku" placeholder="Ej: LLA-001"></div>
+      </div>
+      <div class="grid-2">
+        <div class="campo"><label>Categoría</label><input type="text" id="p-categoria" placeholder="Ej: Llaveros"></div>
+        <div class="campo"><label>Stock inicial</label><input type="number" id="p-stock" min="0" value="0"></div>
+      </div>
+      <div class="grid-2">
+        <div class="campo"><label>Stock mínimo (alerta)</label><input type="number" id="p-stock-min" min="0" value="3"></div>
+        <div class="campo"><label>Precio costo ($)</label><input type="number" id="p-costo" min="0" placeholder="0"></div>
+      </div>
+      <div class="campo" style="max-width:calc(50% - 7px);"><label>Precio venta ($) *</label><input type="number" id="p-venta" min="0" placeholder="0"></div>
+      <div class="error" id="bodega-error"></div>
+      <div class="pie-formulario" style="justify-content:flex-start;">
+        <button class="boton boton-oro" id="btn-agregar-producto" style="width:auto;padding:11px 24px;">Agregar producto a bodega</button>
+      </div>
+    </div>
+
+    <div class="tabla-wrap">
+      <table class="tabla">
+        <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>Venta</th><th>Ajustar</th><th></th></tr></thead>
+        <tbody id="bodega-tbody"></tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById('btn-agregar-producto').onclick = async (ev) => {
+    const errBox = document.getElementById('bodega-error');
+    errBox.classList.remove('visible');
+    const nombre = document.getElementById('p-nombre').value.trim();
+    const venta = document.getElementById('p-venta').value;
+    if (!nombre || venta === '') {
+      errBox.textContent = 'Completa al menos el nombre y el precio de venta.';
+      errBox.classList.add('visible');
+      return;
+    }
+    ev.target.disabled = true;
+    try {
+      await crearProducto({
+        nombre,
+        sku: document.getElementById('p-sku').value.trim(),
+        categoria: document.getElementById('p-categoria').value.trim(),
+        stock: Number(document.getElementById('p-stock').value) || 0,
+        stock_minimo: Number(document.getElementById('p-stock-min').value) || 0,
+        precio_costo: Number(document.getElementById('p-costo').value) || 0,
+        precio_venta: Number(venta) || 0,
+      });
+      toast('Producto agregado a bodega');
+      ['p-nombre', 'p-sku', 'p-categoria', 'p-costo', 'p-venta'].forEach((id) => (document.getElementById(id).value = ''));
+      document.getElementById('p-stock').value = 0;
+      document.getElementById('p-stock-min').value = 3;
+      await pintar();
+    } catch (e) {
+      console.error(e);
+      errBox.textContent = e.message || 'No se pudo guardar el producto.';
+      errBox.classList.add('visible');
+    } finally {
+      ev.target.disabled = false;
+    }
+  };
+
+  await pintar();
+  const cancelarSuscripcion = suscribirseAProductos(() => pintar());
+  return cancelarSuscripcion;
+
+  async function pintar() {
+    const productos = await listarProductos();
+    const bajos = productos.filter((p) => p.stock <= p.stock_minimo);
+
+    document.getElementById('bodega-alerta').innerHTML = bajos.length
+      ? `<div class="banda-alerta rojo" style="background:#F6EBD6;border-color:#E9D4A0;">
+          <h4 style="color:#8A6A22;">🟡 ${bajos.length} producto${bajos.length === 1 ? '' : 's'} con stock bajo</h4>
+          <p style="margin:0;color:#8A6A22;font-size:13px;">${bajos.map((p) => escapeHtml(p.nombre)).join(', ')}</p>
+        </div>`
+      : '';
+
+    const tbody = document.getElementById('bodega-tbody');
+    tbody.innerHTML = productos.length
+      ? productos.map((p) => `
+        <tr>
+          <td class="mono">${escapeHtml(p.sku) || '—'}</td>
+          <td>${escapeHtml(p.nombre)}</td>
+          <td>${escapeHtml(p.categoria) || '—'}</td>
+          <td style="${p.stock <= p.stock_minimo ? 'color:#8A6A22;font-weight:700;' : ''}">${p.stock}</td>
+          <td>${money(p.precio_costo)}</td>
+          <td>${money(p.precio_venta)}</td>
+          <td>
+            <div style="display:flex;gap:5px;">
+              <button class="mini-boton" data-ajustar="${p.id}" data-delta="-1">−1</button>
+              <button class="mini-boton" data-ajustar="${p.id}" data-delta="1">+1</button>
+            </div>
+          </td>
+          <td><button class="mini-boton" data-eliminar="${p.id}">Eliminar</button></td>
+        </tr>`).join('')
+      : `<tr><td colspan="8"><div class="vacio"><b>Bodega vacía</b>Agrega tu primer producto arriba.</div></td></tr>`;
+
+    tbody.querySelectorAll('[data-ajustar]').forEach((btn) => {
+      btn.onclick = async () => {
+        try { await ajustarStock(btn.dataset.ajustar, Number(btn.dataset.delta)); await pintar(); }
+        catch (e) { console.error(e); toast('No se pudo ajustar el stock'); }
+      };
+    });
+    tbody.querySelectorAll('[data-eliminar]').forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm('¿Quitar este producto de bodega? Ya no aparecerá en Punto de venta.')) return;
+        try { await eliminarProducto(btn.dataset.eliminar); toast('Producto eliminado'); await pintar(); }
+        catch (e) { console.error(e); toast('No se pudo eliminar el producto'); }
+      };
+    });
+  }
+}

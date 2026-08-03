@@ -11,17 +11,23 @@ import { registrarRuta, iniciarRouter, configurarControlAcceso } from './router.
 import { renderRecepcion } from './views/recepcion.js';
 import { renderTorre } from './views/torre.js';
 import { renderEstado } from './views/estado.js';
+import { renderBodega } from './views/bodega.js';
+import { renderVentas } from './views/ventas.js';
 import { tieneFuncion } from './planes.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
 registrarRuta('torre', renderTorre, 'torre');
 registrarRuta('estado', renderEstado, 'estado');
+registrarRuta('bodega', renderBodega, 'bodega');
+registrarRuta('ventas', renderVentas, 'ventas');
 
 const NAV = [
   { ruta: 'recepcion', etiqueta: 'Recepción', funcion: 'recepcion' },
   { ruta: 'estado', etiqueta: 'Estado', funcion: 'estado' },
   { ruta: 'torre', etiqueta: 'Torre de control', funcion: 'torre' },
-  // el resto de las pantallas (Ventas, Punto de venta, Bodega, Administración)
+  { ruta: 'bodega', etiqueta: 'Bodega', funcion: 'bodega' },
+  { ruta: 'ventas', etiqueta: 'Ventas', funcion: 'ventas' },
+  // el resto de las pantallas (Punto de venta, Administración)
   // se agregan acá a medida que se migran, siguiendo el mismo patrón —
   // cada una con su "funcion" correspondiente de src/planes.js.
 ];

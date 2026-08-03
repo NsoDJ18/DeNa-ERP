@@ -248,3 +248,24 @@ body{
 .estado-cerrado{ text-align:center;padding:12px;border-radius:10px;font-weight:600;margin:16px 0; }
 .estado-cerrado.rojo{ background:#FBEAEA;color:#9B2C2C; }
 .estado-cerrado.verde{ background:#E3EDE6;color:#2E5C42; }
+
+/* ===================== tablas genéricas ===================== */
+.tabla-wrap{ overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);box-shadow:var(--shadow); }
+table.tabla{ width:100%;border-collapse:collapse;font-size:13px;min-width:640px; }
+table.tabla th{
+  text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
+  padding:11px 13px;border-bottom:1px solid var(--line);background:var(--bg-soft);white-space:nowrap;
+}
+table.tabla td{ padding:11px 13px;border-bottom:1px solid var(--line);color:var(--ink); }
+table.tabla tr:last-child td{ border-bottom:none; }
+.mini-boton{
+  font-family:inherit;font-size:11px;font-weight:700;padding:5px 10px;border-radius:7px;
+  border:1px solid var(--line);background:var(--bg);cursor:pointer;color:var(--ink-soft);
+}
+.mini-boton:hover{ border-color:var(--gold);color:var(--ink); }
+
+/* ===================== tarjetas de estadística (KPI) ===================== */
+.stats{ display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:22px; }
+.stat{ background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow); }
+.stat-etiqueta{ font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;font-weight:600; }
+.stat-valor{ font-family:'Fraunces',serif;font-size:22px;color:var(--navy);margin-top:4px;font-weight:600; }

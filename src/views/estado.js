@@ -1,4 +1,5 @@
 import { listarOrdenes, obtenerOrden, cambiarEstadoOrden, agregarNota, aplicarNotaCredito, suscribirseAOrdenes } from '../data/ordenes.js';
+import { crearSolicitudNC } from '../data/notasCredito.js';
 import { confirmarEntrega } from '../lib/entrega.js';
 import { puedeAutorizar } from '../auth/session.js';
 import { escapeHtml, fdate, fdatetime, todayStr, toast } from '../lib/util.js';
@@ -158,15 +159,29 @@ function pintarDetalle(o) {
     </div>
     <div style="margin-bottom:16px;"><span class="mini-label">Descripción</span><div>${escapeHtml(o.descripcion)}</div></div>
 
-    ${puedeAutorizar() && o.estado !== 'cancelado' ? `
+    ${o.estado !== 'cancelado' ? (puedeAutorizar() ? `
     <div class="campo" id="nc-wrap" style="background:var(--bg-soft);border-radius:10px;padding:12px;">
       <label style="margin-bottom:8px;">🧾 Nota de crédito (encargado/admin)</label>
       <div class="grid-2">
         <div class="campo"><label>Nuevo precio total</label><input type="number" id="nc-precio" min="0" value="${o.precio || 0}"></div>
         <div class="campo"><label>Motivo *</label><input type="text" id="nc-motivo" placeholder="Ej: producto con defecto"></div>
       </div>
+      <div class="campo"><label>Si hay que devolver plata, ¿en qué método?</label>
+        <select id="nc-metodo-devolucion"><option>Efectivo</option><option>Transferencia</option><option>Débito</option><option>Crédito</option><option>Otro</option></select>
+      </div>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:0 0 8px;">Al aplicarla, el pedido se cierra como cancelado automáticamente.</p>
       <button class="boton boton-ghost" id="btn-nota-credito" style="width:auto;padding:8px 16px;">Aplicar nota de crédito</button>
-    </div>` : ''}
+    </div>` : `
+    <div class="campo" id="nc-wrap" style="background:var(--bg-soft);border-radius:10px;padding:12px;">
+      <label style="margin-bottom:8px;">🧾 Solicitar nota de crédito</label>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:0 0 8px;">Queda pendiente hasta que un encargado de turno o administrador la autorice.</p>
+      <div class="grid-2">
+        <div class="campo"><label>Precio que propones</label><input type="number" id="nc-precio" min="0" value="${o.precio || 0}"></div>
+        <div class="campo"><label>Motivo *</label><input type="text" id="nc-motivo" placeholder="Ej: producto con defecto"></div>
+      </div>
+      <div class="campo"><label>Tu nombre *</label><input type="text" id="nc-solicitante" placeholder="Quién solicita"></div>
+      <button class="boton boton-ghost" id="btn-solicitar-nc" style="width:auto;padding:8px 16px;">Solicitar autorización</button>
+    </div>`) : ''}
 
     <div class="campo"><label>Agregar nota interna</label><textarea id="detalle-nota" placeholder="Ej: cliente confirmó color..."></textarea></div>
     ${notas.length ? `<div style="margin-bottom:14px;">${notas.map((n) => `<div style="font-size:12.5px;color:var(--ink-soft);padding:6px 0;border-bottom:1px dotted var(--line);"><b style="color:var(--ink);">${fdate(n.fecha)}:</b> ${escapeHtml(n.texto)}</div>`).join('')}</div>` : ''}
@@ -193,18 +208,39 @@ function pintarDetalle(o) {
   if (btnNotaCredito) btnNotaCredito.onclick = async (ev) => {
     const nuevoPrecio = Number(document.getElementById('nc-precio').value);
     const motivo = document.getElementById('nc-motivo').value.trim();
+    const metodoDevolucion = document.getElementById('nc-metodo-devolucion').value;
     if (isNaN(nuevoPrecio) || nuevoPrecio < 0) { toast('Precio inválido'); return; }
     if (nuevoPrecio > (o.precio || 0)) { toast('Una nota de crédito solo puede bajar el precio, no subirlo'); return; }
     if (!motivo) { toast('Escribe el motivo de la nota de crédito'); return; }
+    if (!confirm('Esto va a cerrar el pedido como cancelado. ¿Continuar?')) return;
     ev.target.disabled = true;
     try {
-      await aplicarNotaCredito(o.id, nuevoPrecio, motivo);
-      toast('Nota de crédito aplicada');
-      const actualizado = await obtenerOrden(o.id);
-      pintarDetalle(actualizado);
+      await aplicarNotaCredito(o.id, nuevoPrecio, motivo, metodoDevolucion);
+      toast('Nota de crédito aplicada, pedido cancelado');
+      cerrarModal();
     } catch (e) {
       console.error(e);
       toast('No se pudo aplicar la nota de crédito: ' + (e.message || ''));
+    } finally {
+      ev.target.disabled = false;
+    }
+  };
+  const btnSolicitarNC = document.getElementById('btn-solicitar-nc');
+  if (btnSolicitarNC) btnSolicitarNC.onclick = async (ev) => {
+    const precioSolicitado = Number(document.getElementById('nc-precio').value);
+    const motivo = document.getElementById('nc-motivo').value.trim();
+    const solicitadoPor = document.getElementById('nc-solicitante').value.trim();
+    if (isNaN(precioSolicitado) || precioSolicitado < 0) { toast('Precio inválido'); return; }
+    if (precioSolicitado > (o.precio || 0)) { toast('Una nota de crédito solo puede bajar el precio, no subirlo'); return; }
+    if (!motivo || !solicitadoPor) { toast('Completa el motivo y tu nombre'); return; }
+    ev.target.disabled = true;
+    try {
+      await crearSolicitudNC({ ordenId: o.id, precioActual: o.precio, precioSolicitado, motivo, solicitadoPor });
+      toast('Solicitud enviada — queda pendiente de autorización');
+      cerrarModal();
+    } catch (e) {
+      console.error(e);
+      toast('No se pudo enviar la solicitud');
     } finally {
       ev.target.disabled = false;
     }

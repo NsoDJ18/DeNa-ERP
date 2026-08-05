@@ -1,82 +1,136 @@
-# Backlog de migración — HTML original → dena-erp-web
+# Estado real del proyecto — repaso completo
 
-Estado actual: **8 de 10 pantallas migradas y validadas con build real**.
+*Última actualización: después de nota de crédito con flujo de solicitud.*
 
-## ✅ Migradas y funcionando
-- Recepción — formulario completo, genera la orden en Supabase
-- Estado — búsqueda, semáforo de plazos, modal de detalle, tiempo real
-- Torre de control — tablero de 5 estaciones, alertas por tiempo máximo
-- Bodega — productos, SKU, stock, alertas de mínimo
-- Ventas — abrir/cerrar turno, verificación por método de pago, folio TBK
-- Punto de venta — carrito, descuenta stock de Bodega, clientes frecuentes, KPIs
-- Administración — KPIs, Excel, empleados, configuración, protegida por rol
-- Monitor — pista de producción en vivo, buscador para clientes, pantalla completa/externa
+## ✅ Las 9 pantallas de trabajo — migradas y funcionando
 
-## 🆕 Sistema de diferenciación por plan
-- ✅ `src/planes.js` — un solo archivo donde defines qué funciones tiene
-      Bronce / Plata / Oro.
-- ✅ Menú y router filtrados según plan Y rol (`admin`/`trabajador`)
-- ⬜ Falta: pantalla para cambiar el plan de una empresa sin entrar a
-      Supabase directamente — por ahora se cambia a mano en Table Editor
+| Pantalla | Estado | Notas |
+|---|---|---|
+| Recepción | ✅ Completa | Formulario, ticket, PDF, etiqueta. **Falta**: fotos de referencia (ver abajo) |
+| Estado | ✅ Completa | Búsqueda, semáforo, detalle, notas, avanzar/cancelar, entrega con pago, nota de crédito (directa y por solicitud) |
+| Torre de control | ✅ Completa | Kanban, entrega con pago |
+| Hoy | ✅ Completa | Atrasados, vencen pronto, recibidos hoy, entregados hoy |
+| Bodega | ✅ Completa | CRUD, alertas de stock, CSV import, precios protegidos por rol |
+| Ventas | ✅ Completa | Apertura/cierre de turno, cuadratura por método, folio TBK |
+| Punto de venta | ✅ Completa | Carrito, descuenta stock, clientes frecuentes, KPIs, vendedor autocompletado |
+| Monitor | ✅ Completa | Pista en vivo, buscador de clientes, pantalla completa/externa |
+| Administración | ✅ Completa | Resumen+alarma saldo, Solicitudes NC, Equipo+invitar, Empleados, Configuración |
 
-## Selector de terminal — REEMPLAZADO por algo mejor ✅
-En el HTML original, cualquiera podía elegir "Terminal de administración"
-escribiendo una clave — candado de frontend, no seguridad real. En la
-versión migrada, el menú se arma solo según el rol real de la cuenta
-(guardado en la base de datos) — no se puede saltar escribiendo la URL.
+**El "Selector de terminal" del HTML original no se migró tal cual** — se
+reemplazó por navegación automática según el rol real de la cuenta, que es
+más seguro (ver conversación anterior).
 
-## Login de Administración — RESUELTO ✅
-Un solo login de Supabase con roles. No se migra el segundo usuario/clave
-del HTML original.
+## ✅ Arquitectura e infraestructura
 
-## ⬜ Pendiente
-- **Hoy** — vista de pedidos de hoy/vencidos/entregados hoy (no migrada)
-- **Recepción**: fotos de referencia (requiere Supabase Storage), ticket
-  visual, descargar PDF, imprimir etiqueta
-- **Administración**: filtro por estado/tipo en la tabla (hoy solo hay
-  buscador de texto)
-- Nota de arquitectura: Bodega y Ventas y caja ya NO están anidadas dentro
-  de Administración como en el HTML original — viven como pantallas propias
-  en el menú principal. Es más simple y ya están filtradas por plan igual.
+- Autenticación real (Supabase Auth) + multi-empresa con RLS
+- 3 planes (Bronce/Plata/Oro) con funciones filtradas por plan — `src/planes.js`
+- 3 roles (trabajador/encargado/admin) con autorización real en base de datos
+  (triggers), no solo en la interfaz
+- PWA instalable, con ícono y fondo de marca
+- Tiempo real en las pantallas que lo necesitan, sin errores de navegación
+- Nota de crédito con devolución que cuadra la caja
 
-## 🆕 Feedback de esta ronda
+## ⚠️ Construido pero SIN CONECTAR — esto es lo que realmente falta
+
+Estas piezas existen como código (Edge Functions) pero **no hay ningún botón
+en la aplicación que las use todavía**. No son bugs, es trabajo que no
+alcanzamos a enchufar:
+
+1. **Pago con tarjeta (Transbank Webpay)** — las funciones
+   `crear-transaccion-webpay` y `confirmar-transaccion-webpay` existen y
+   están desplegables, pero **ningún botón de la app las llama**. Falta
+   agregar "Pagar con tarjeta" en Recepción/Estado que abra el flujo de pago.
+2. **Notificación por WhatsApp** — la función `notificar-whatsapp` existe,
+   pero requiere: (a) que la despliegues, (b) que conectes el Database
+   Webhook en Supabase (documentado en `supabase/functions/README.md`), y
+   (c) tener la cuenta de WhatsApp Business de Meta aprobada. Nada de esto
+   se puede hacer desde el código, son pasos tuyos en paneles externos.
+3. **Chequeo automático de "no retirados"** — la función
+   `chequeo-no-retirados` existe, pero necesita el Cron Job configurado en
+   el dashboard de Supabase para correr sola.
+
+## ⬜ Pendiente real (no empezado)
+
+- **Fotos de referencia en Recepción** — requiere activar Supabase Storage
+  (un bucket nuevo) y agregar el input de archivos + subida. No es difícil,
+  pero es una pieza nueva que no hemos tocado.
+- **Filtro por estado/tipo en la tabla de Administración** — hoy solo hay
+  buscador de texto libre, falta el dropdown de filtro como tenía el HTML original.
+- **Todas las Edge Functions deben desplegarse** — código listo no es lo
+  mismo que código funcionando en producción. Ver `supabase/functions/README.md`
+  para los comandos exactos (`supabase functions deploy ...`).
+
+## Migraciones SQL — checklist de lo que debe estar corrido
+
+Si en algún momento perdiste la cuenta de cuáles ya ejecutaste, estos son
+TODOS los `.sql` que deberían estar aplicados en tu proyecto de Supabase
+(además del `schema.sql` inicial):
+
+```
+migracion_empleados.sql
+migracion_pagos_tbk.sql
+migracion_planes.sql
+migracion_rol_encargado.sql
+migracion_autorizacion_precios.sql
+migracion_nota_credito.sql
+migracion_solicitudes_nc.sql
+```
+
+**Tip**: si tienes dudas de si alguno ya corrió, no pasa nada por volver a
+correrlo — todos están escritos para ser seguros de ejecutar más de una vez
+(usan `if not exists` o similar).
+
+## 🆕 Ronda: planes reorganizados, PIN instantáneo, nombre de app
 
 ### ✅ Resuelto
-- **Pago antes de entregar** (era una regresión de la migración — ya existía
-  en el HTML original y se nos quedó fuera). Ahora Estado, Torre y cualquier
-  cierre a "entregado" exige registrar el saldo pendiente antes de cerrar,
-  y ese pago entra automático a la cuadratura de caja del turno abierto.
-- **Rol "Encargado de turno"** — nueva jerarquía intermedia entre trabajador
-  y administrador. Se asigna desde Administración → Equipo.
-- **Autorización real para cambiar precios en Bodega** — no es solo un botón
-  escondido: hay un trigger en la base de datos que rechaza el cambio si
-  quien lo intenta no es encargado o admin, así no se puede saltar desde
-  fuera de la app.
-- **Alarma de saldo por cobrar** en Administración → Resumen: lista los
-  pedidos con saldo pendiente, no solo un número suelto.
+- **`planes.js` reorganizado** — mapa de archivos actualizado (ya no dice
+  "pendiente de migrar" en pantallas que ya están listas), agregada la
+  función `nombre_app` a Plata y Oro.
+- **PIN de autorización instantánea** — en Punto de Venta, cualquier
+  trabajador puede buscar un pedido por folio y pedir una nota de crédito;
+  un encargado/admin la valida ahí mismo con un PIN (configurado en
+  Administración → Configuración), sin pasar por la cola de Solicitudes.
+  El candado real vive en la base de datos (función `aplicar_nota_credito_con_pin`),
+  el PIN nunca se expone al navegador — solo se valida server-side.
+- **Nombre de la app personalizable** (Plata/Oro) — "DENA ERP" en el menú
+  se puede reemplazar por el nombre del negocio, desde Administración → Configuración.
+- **Filtro por estado y tipo** en la tabla de Administración → Resumen.
 
-### ⬜ Pendiente (quedó fuera de esta ronda por tiempo)
-- **Vista "Hoy"** — sigue siendo la única pantalla del backlog original sin migrar.
-- **Nota de crédito formal** — hoy la autorización de precios cubre Bodega;
-  falta un flujo específico de "nota de crédito" para modificar el valor
-  de un pedido ya facturado (Recepción/Estado), con el mismo candado de
-  encargado/admin.
-- **Invitar nuevos miembros del equipo sin usar Supabase directamente** —
-  hoy cambiar el ROL de alguien ya vinculado se hace desde la app, pero
-  vincular a alguien nuevo por primera vez todavía requiere Table Editor.
-  Se puede resolver con una Edge Function que busque por correo.
+### Dos formas de nota de crédito ahora conviven, a propósito
+- **Cola de solicitudes** (Estado → trabajador solicita → Admin revisa
+  cuando puede) — pensada para pedidos, sin apuro.
+- **PIN instantáneo** (Punto de Venta → buscar folio → validar en el
+  momento) — pensada para el mostrador, con el cliente esperando.
+Ambas terminan en la misma función de nota de crédito, así que el
+historial y la cuadratura de caja quedan iguales sin importar cuál se usó.
 
-## 🎉 Ronda final — backlog completo
+### ⬜ Sigue pendiente (próxima ronda, ya acordado)
+- Conectar el botón de pago con tarjeta (Transbank) a la interfaz
+- Fotos de referencia en Recepción (Supabase Storage)
+- Nota de crédito para ventas de mostrador (hoy el PIN solo aplica a
+  pedidos/órdenes, no a una venta ya registrada en Punto de Venta)
+- Desplegar las Edge Functions + configurar el Cron Job de no retirados
 
-- ✅ **Vista "Hoy"** — Atrasados, Vencen hoy/mañana, Recibidos hoy, Entregados hoy.
-- ✅ **Nota de crédito real** — reducir el precio de un pedido ya facturado
-  requiere ser encargado o admin, con motivo obligatorio y candado en la
-  base de datos (trigger), no solo en la interfaz.
-- ✅ **Invitar miembros del equipo desde la app** (Administración → Equipo)
-  — ya no hace falta entrar a Supabase para vincular a alguien nuevo, solo
-  su correo (debe haberse registrado antes) y el rol que le corresponde.
+## 🆕 Corrección de seguridad: PIN reemplazado por verificación real
 
-**Con esto, las 10 pantallas del backlog original están migradas y
-funcionando.** Antes de dar por cerrado el demo: correr las migraciones SQL
-pendientes (revisa la carpeta `supabase/`, quedaron varias en esta última
-ronda) y pasar por el `CHECKLIST-PRUEBAS.md`.
+El PIN compartido tenía un problema de fondo: cualquiera que lo supiera
+(incluido el propio trabajador) podía usarlo, sin importar si realmente
+era encargado o admin. Se reemplazó por completo:
+
+- **Ya no hay PIN configurable.** Se quitó el campo de Administración → Configuración.
+- **Solo el ADMINISTRADOR puede autorizar** (ya no encargado de turno).
+- La autorización desde Punto de Venta ahora pide **correo y contraseña
+  reales** del administrador, verificados de verdad contra Supabase Auth
+  en el servidor — nunca se compara nada en el navegador.
+- Nueva función de base de datos `aplicar_nota_credito_verificada`, que
+  **solo el servidor puede invocar** (revocado el permiso para cualquier
+  usuario normal) — así ni la Edge Function puede saltarse el candado.
+
+**Nueva migración**: `migracion_nc_verificada_admin.sql` (reemplaza en la
+práctica a `migracion_pin_autorizacion.sql` — puedes correr ambas sin
+problema, la del PIN simplemente queda sin uso).
+
+**Debes desplegar la nueva Edge Function** cuando estés en tu laptop:
+```
+supabase functions deploy autorizar-nc-admin
+```

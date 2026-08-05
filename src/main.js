@@ -142,13 +142,18 @@ function renderSinEmpresa() {
 // ============================================================
 // RENDER: armazón de la app conectada (nav + contenido según la ruta)
 // ============================================================
+function nombreMostrarApp(activa) {
+  if (tieneFuncion(activa.plan, 'nombre_app') && activa.nombreApp) return activa.nombreApp;
+  return 'DENA ERP';
+}
+
 function renderAppShell(sesion, activa) {
   app.className = ''; // ya no es pantalla centrada
   const navVisible = NAV.filter((n) => tieneFuncion(activa.plan, n.funcion) && (!n.soloAdmin || activa.rol === 'admin'));
   app.innerHTML = `
     <div class="app-shell">
       <div class="app-nav">
-        <div class="marca">DENA ERP <span style="color:var(--ink-soft);font-weight:400;font-size:12px;">— ${activa.nombreEmpresa}</span></div>
+        <div class="marca">${nombreMostrarApp(activa)} <span style="color:var(--ink-soft);font-weight:400;font-size:12px;">— ${activa.nombreEmpresa}</span></div>
         <div class="botones" id="nav-botones">
           ${navVisible.map((n) => `<button class="nav-boton" data-ruta="${n.ruta}">${n.etiqueta}</button>`).join('')}
           <button class="nav-boton" id="btn-salir" style="border-color:#F0C9C9;color:#9B2C2C;">Cerrar sesión</button>

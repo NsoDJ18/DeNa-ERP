@@ -53,7 +53,7 @@ const CLAVE_EMPRESA_ACTIVA = 'dena_empresa_activa';
 export async function obtenerEmpresasDelUsuario() {
   const { data, error } = await supabase
     .from('usuarios_empresas')
-    .select('empresa_id, rol, nombre_mostrar, empresas ( id, nombre, sucursal_texto, rubro, plan )');
+    .select('empresa_id, rol, nombre_mostrar, empresas ( id, nombre, sucursal_texto, rubro, plan, nombre_app )');
   if (error) throw error;
   return data.map((fila) => ({
     id: fila.empresa_id,
@@ -63,6 +63,7 @@ export async function obtenerEmpresasDelUsuario() {
     sucursal: fila.empresas?.sucursal_texto,
     rubro: fila.empresas?.rubro,
     plan: fila.empresas?.plan || 'bronce',
+    nombreApp: fila.empresas?.nombre_app,
   }));
 }
 

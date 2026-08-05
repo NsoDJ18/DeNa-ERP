@@ -2,7 +2,9 @@ import { listarOrdenes, archivarOrden, restaurarOrden } from '../data/ordenes.js
 import { abrirDetalle, badge } from './estado.js';
 import { listarEmpleados, agregarEmpleado, eliminarEmpleado } from '../data/empleados.js';
 import { listarEquipo, cambiarRolMiembro, invitarMiembro } from '../data/equipo.js';
-import { obtenerTiemposMax, guardarTiemposMax, guardarSucursal } from '../data/configuracion.js';
+import { listarSolicitudesPendientes, aprobarSolicitudNC, rechazarSolicitudNC } from '../data/notasCredito.js';
+import { obtenerTiemposMax, guardarTiemposMax, guardarSucursal, guardarNombreApp } from '../data/configuracion.js';
+import { tieneFuncion } from '../planes.js';
 import { escapeHtml, money, fdate, fdatetime, localDateStr, toast } from '../lib/util.js';
 
 let seccionActual = 'resumen';
@@ -20,6 +22,7 @@ export async function renderAdmin(contenedor, activa) {
     <div class="encabezado-vista"><h2>Administración</h2><p class="subtitulo">Todos los pedidos del taller</p></div>
     <div class="botones-sub" id="admin-subnav">
       <button data-sec="resumen" class="activo">📊 Resumen</button>
+      <button data-sec="solicitudes">🧾 Solicitudes NC</button>
       <button data-sec="equipo">🧑‍💼 Equipo</button>
       <button data-sec="empleados">👥 Empleados</button>
       <button data-sec="configuracion">⚙️ Configuración</button>
@@ -36,6 +39,7 @@ export async function renderAdmin(contenedor, activa) {
   async function pintarSeccion() {
     const cont = document.getElementById('admin-contenido');
     if (seccionActual === 'resumen') return pintarResumen(cont);
+    if (seccionActual === 'solicitudes') return pintarSolicitudes(cont, activa);
     if (seccionActual === 'equipo') return pintarEquipo(cont);
     if (seccionActual === 'empleados') return pintarEmpleados(cont);
     if (seccionActual === 'configuracion') return pintarConfiguracion(cont, activa);
@@ -85,7 +89,24 @@ async function pintarResumen(cont) {
       <button class="boton boton-oro" id="btn-excel" style="width:auto;padding:10px 20px;">Exportar a Excel</button>
     </div>
 
-    <div class="campo"><input type="text" id="ad-buscar" placeholder="Buscar cliente, RUT o folio..."></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+      <div class="campo" style="flex:2;min-width:200px;margin-bottom:0;"><input type="text" id="ad-buscar" placeholder="Buscar cliente, RUT o folio..."></div>
+      <div class="campo" style="flex:1;min-width:160px;margin-bottom:0;">
+        <select id="ad-filtro-estado">
+          <option value="">Todos los estados</option>
+          <option value="ingreso">Ingreso de OT</option>
+          <option value="diseno">En diseño</option>
+          <option value="fabricacion">Fabricación</option>
+          <option value="calidad">Control de calidad</option>
+          <option value="listo">Listo para entrega</option>
+          <option value="entregado">Entregado</option>
+          <option value="no_retirado">No retirado</option>
+        </select>
+      </div>
+      <div class="campo" style="flex:1;min-width:160px;margin-bottom:0;">
+        <select id="ad-filtro-tipo"><option value="">Todos los tipos</option></select>
+      </div>
+    </div>
     <div class="tabla-wrap" style="margin-bottom:24px;">
       <table class="tabla">
         <thead><tr><th>Folio</th><th>Cliente</th><th>RUT</th><th>Tipo</th><th>Entrega</th><th>Estado</th><th>Total</th><th>Saldo</th></tr></thead>
@@ -103,11 +124,17 @@ async function pintarResumen(cont) {
     </div>
   `;
 
+  const tiposDisponibles = [...new Set(activas.map((o) => o.tipo).filter(Boolean))].sort();
+  document.getElementById('ad-filtro-tipo').innerHTML += tiposDisponibles.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+
   const pintarTabla = () => {
     const q = document.getElementById('ad-buscar').value.trim().toLowerCase();
-    const lista = q
-      ? activas.filter((o) => o.folio.toLowerCase().includes(q) || (o.cliente || '').toLowerCase().includes(q) || (o.rut_cliente || '').toLowerCase().includes(q))
-      : activas;
+    const estadoFiltro = document.getElementById('ad-filtro-estado').value;
+    const tipoFiltro = document.getElementById('ad-filtro-tipo').value;
+    let lista = activas;
+    if (q) lista = lista.filter((o) => o.folio.toLowerCase().includes(q) || (o.cliente || '').toLowerCase().includes(q) || (o.rut_cliente || '').toLowerCase().includes(q));
+    if (estadoFiltro) lista = lista.filter((o) => o.estado === estadoFiltro);
+    if (tipoFiltro) lista = lista.filter((o) => o.tipo === tipoFiltro);
     document.getElementById('ad-tbody').innerHTML = lista.length
       ? lista.map((o) => `
         <tr class="fila-clickable" data-id="${o.id}">
@@ -120,6 +147,8 @@ async function pintarResumen(cont) {
     document.querySelectorAll('#ad-tbody [data-id]').forEach((fila) => { fila.onclick = () => abrirDetalle(fila.dataset.id); });
   };
   document.getElementById('ad-buscar').oninput = pintarTabla;
+  document.getElementById('ad-filtro-estado').onchange = pintarTabla;
+  document.getElementById('ad-filtro-tipo').onchange = pintarTabla;
   pintarTabla();
 
   document.getElementById('ad-cancelados-tbody').innerHTML = archivadas.length
@@ -167,6 +196,80 @@ async function pintarResumen(cont) {
 // ============================================================
 // EMPLEADOS
 // ============================================================
+// ============================================================
+// SOLICITUDES DE NOTA DE CRÉDITO (pendientes de autorizar)
+// ============================================================
+async function pintarSolicitudes(cont, activa) {
+  if (activa.rol === 'trabajador') {
+    cont.innerHTML = `<div class="vacio" style="padding:30px;">Solo un encargado de turno o administrador puede revisar solicitudes.</div>`;
+    return;
+  }
+  cont.innerHTML = `<div id="solicitudes-lista"></div>`;
+  await pintarLista();
+
+  async function pintarLista() {
+    const solicitudes = await listarSolicitudesPendientes();
+    const listaEl = document.getElementById('solicitudes-lista');
+    listaEl.innerHTML = solicitudes.length
+      ? solicitudes.map((s) => `
+        <div class="tarjeta" style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div>
+              <span class="mono" style="color:var(--gold);font-weight:700;">${s.ordenes?.folio || '—'}</span>
+              <div style="font-weight:600;">${escapeHtml(s.ordenes?.cliente || '')}</div>
+              <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;">
+                Pide bajar de ${money(s.precio_actual)} a <b style="color:var(--ink);">${money(s.precio_solicitado)}</b><br>
+                Motivo: ${escapeHtml(s.motivo)}<br>
+                Solicitado por ${escapeHtml(s.solicitado_por)} — ${fdatetime(s.fecha_solicitud)}
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:180px;">
+              <select data-metodo-dev="${s.id}" style="font-family:inherit;font-size:12px;padding:6px 8px;border-radius:7px;border:1px solid var(--line);">
+                <option>Efectivo</option><option>Transferencia</option><option>Débito</option><option>Crédito</option><option>Otro</option>
+              </select>
+              <button class="boton boton-oro" data-aprobar="${s.id}" style="padding:8px;">Aprobar</button>
+              <button class="boton boton-ghost" data-rechazar="${s.id}" style="padding:8px;">Rechazar</button>
+            </div>
+          </div>
+        </div>`).join('')
+      : `<div class="vacio" style="padding:30px;"><b>Sin solicitudes pendientes</b>Las notas de crédito que pidan los trabajadores van a aparecer acá.</div>`;
+
+    listaEl.querySelectorAll('[data-aprobar]').forEach((btn) => {
+      btn.onclick = async () => {
+        const solicitud = solicitudes.find((s) => s.id === btn.dataset.aprobar);
+        const metodo = document.querySelector(`[data-metodo-dev="${btn.dataset.aprobar}"]`).value;
+        if (!confirm('Esto va a cerrar el pedido como cancelado. ¿Continuar?')) return;
+        btn.disabled = true;
+        try {
+          await aprobarSolicitudNC(solicitud, activa.nombreMostrar || activa.nombreEmpresa, metodo);
+          toast('Nota de crédito aprobada y aplicada');
+          await pintarLista();
+        } catch (e) {
+          console.error(e);
+          toast('No se pudo aprobar: ' + (e.message || ''));
+          btn.disabled = false;
+        }
+      };
+    });
+    listaEl.querySelectorAll('[data-rechazar]').forEach((btn) => {
+      btn.onclick = async () => {
+        const motivo = prompt('¿Por qué se rechaza esta solicitud?');
+        if (motivo === null) return;
+        btn.disabled = true;
+        try {
+          await rechazarSolicitudNC(btn.dataset.rechazar, activa.nombreMostrar || activa.nombreEmpresa, motivo);
+          toast('Solicitud rechazada');
+          await pintarLista();
+        } catch (e) {
+          console.error(e);
+          toast('No se pudo rechazar');
+          btn.disabled = false;
+        }
+      };
+    });
+  }
+}
+
 // ============================================================
 // EQUIPO: jerarquías (admin / encargado de turno / trabajador)
 // ============================================================
@@ -305,10 +408,27 @@ async function pintarConfiguracion(cont, activa) {
       <button class="boton boton-ghost" id="btn-guardar-tmax">Guardar tiempos</button>
     </div>
 
-    <div class="tarjeta" style="max-width:480px;">
+    <div class="tarjeta" style="max-width:480px;margin-bottom:22px;">
       <h3 style="margin-top:0;">Nombre del local / sucursal</h3>
       <div class="campo"><label>Texto bajo el logo</label><input type="text" id="cfg-sucursal" value="${escapeHtml(activa.sucursal || '')}"></div>
       <button class="boton boton-ghost" id="btn-guardar-sucursal">Guardar</button>
+    </div>
+
+    ${tieneFuncion(activa.plan, 'nombre_app') ? `
+    <div class="tarjeta" style="max-width:480px;">
+      <h3 style="margin-top:0;">Nombre de la aplicación</h3>
+      <p class="subtitulo" style="margin-bottom:12px;">Reemplaza "DENA ERP" por el nombre de tu negocio en el menú de arriba. Déjalo vacío para volver al nombre por defecto.</p>
+      <div class="campo"><label>Nombre a mostrar</label><input type="text" id="cfg-nombre-app" value="${escapeHtml(activa.nombreApp || '')}" placeholder="Ej: Regalos con Cariño ERP"></div>
+      <button class="boton boton-ghost" id="btn-guardar-nombre-app">Guardar</button>
+    </div>` : `
+    <div class="tarjeta" style="max-width:480px;">
+      <h3 style="margin-top:0;">Nombre de la aplicación</h3>
+      <p class="subtitulo">Disponible en los planes Plata y Oro.</p>
+    </div>`}
+
+    <div class="tarjeta" style="max-width:480px;margin-top:22px;background:var(--bg-soft);">
+      <h3 style="margin-top:0;">🔒 Autorización de notas de crédito</h3>
+      <p class="subtitulo">Ya no se usa un PIN compartido. En Punto de venta, cualquier nota de crédito solicitada se autoriza con el correo y contraseña reales de un administrador — no hace falta configurar nada acá.</p>
     </div>
   `;
 
@@ -329,5 +449,15 @@ async function pintarConfiguracion(cont, activa) {
     const texto = document.getElementById('cfg-sucursal').value.trim();
     try { await guardarSucursal(texto); activa.sucursal = texto; toast('Nombre de local actualizado'); }
     catch (e) { console.error(e); toast('No se pudo guardar'); }
+  };
+
+  const btnNombreApp = document.getElementById('btn-guardar-nombre-app');
+  if (btnNombreApp) btnNombreApp.onclick = async () => {
+    const texto = document.getElementById('cfg-nombre-app').value.trim();
+    try {
+      await guardarNombreApp(texto);
+      activa.nombreApp = texto || null;
+      toast('Nombre de la aplicación actualizado — recarga la página para verlo en el menú');
+    } catch (e) { console.error(e); toast('No se pudo guardar'); }
   };
 }

@@ -17,6 +17,7 @@ create table empresas (
   rut           text,
   rubro         text,                          -- ej: "Imprenta digital", "Peluquería", etc.
   sucursal_texto text default '',
+  nombre_app    text,                            -- si está seteado y el plan lo permite, reemplaza "DENA ERP" en el menú
   plan          text not null default 'bronce' check (plan in ('bronce','plata','oro')),
   creado_en     timestamptz default now()
 );
@@ -88,10 +89,12 @@ create index idx_ordenes_estado on ordenes(empresa_id, estado);
 create or replace function bloquear_baja_precio_sin_autorizacion()
 returns trigger as $$
 begin
-  if new.precio < old.precio and not exists (
-    select 1 from usuarios_empresas
-    where usuario_id = auth.uid() and empresa_id = new.empresa_id and rol in ('admin','encargado')
-  )
+  if new.precio < old.precio
+     and coalesce(current_setting('app.pin_autorizado', true), 'false') != 'true'
+     and not exists (
+       select 1 from usuarios_empresas
+       where usuario_id = auth.uid() and empresa_id = new.empresa_id and rol in ('admin','encargado')
+     )
   then
     raise exception 'Solo un encargado de turno o administrador puede aplicar una nota de crédito.';
   end if;
@@ -210,6 +213,157 @@ create table empleados (
 );
 create index idx_empleados_empresa on empleados(empresa_id);
 
+-- ---------- 11. SOLICITUDES DE NOTA DE CRÉDITO (trabajador pide, encargado/admin autoriza) ----------
+create table solicitudes_nc (
+  id                uuid primary key default gen_random_uuid(),
+  empresa_id        uuid references empresas(id) on delete cascade not null,
+  orden_id          uuid references ordenes(id) on delete cascade not null,
+  precio_actual     numeric(12,2) not null,
+  precio_solicitado numeric(12,2) not null,
+  motivo            text not null,
+  solicitado_por    text,
+  estado            text not null default 'pendiente' check (estado in ('pendiente','aprobada','rechazada')),
+  fecha_solicitud   timestamptz default now(),
+  revisado_por      text,
+  fecha_revision    timestamptz,
+  motivo_rechazo    text
+);
+create index idx_solicitudes_nc_empresa on solicitudes_nc(empresa_id, estado);
+
+-- ---------- 12. PIN DE AUTORIZACIÓN (para validar en el momento, sin cola de espera) ----------
+-- Tabla separada a propósito: nadie puede LEER el pin directo por la API
+-- (ni con RLS "for all", porque no hay ninguna política de SELECT acá) —
+-- solo se puede escribir (admin) o VALIDAR a través de la función de abajo,
+-- que nunca revela el valor guardado, solo dice si coincide o no.
+create table seguridad_empresa (
+  empresa_id        uuid primary key references empresas(id) on delete cascade,
+  pin_autorizacion  text
+);
+alter table seguridad_empresa enable row level security;
+create policy admin_administra_pin on seguridad_empresa for all
+  using (es_admin_de(empresa_id)) with check (es_admin_de(empresa_id));
+
+-- Aplica una nota de crédito validando el PIN en el mismo paso, sin
+-- necesitar que quien esté logueado sea encargado/admin — el PIN reemplaza
+-- esa validación por esta vez, exactamente para el mostrador donde no hay
+-- tiempo de esperar una cola de aprobación.
+create or replace function aplicar_nota_credito_con_pin(
+  p_orden_id uuid, p_nuevo_precio numeric, p_motivo text, p_pin text,
+  p_autorizado_por text, p_metodo_devolucion text
+)
+returns jsonb as $$
+declare
+  v_empresa_id uuid;
+  v_precio_actual numeric;
+  v_abono numeric;
+  v_pagos jsonb;
+  v_historial jsonb;
+  v_timestamps jsonb;
+  v_diferencia numeric;
+  v_nuevo_abono numeric;
+  v_ahora timestamptz := now();
+begin
+  select empresa_id, precio, abono, pagos, historial, timestamps
+    into v_empresa_id, v_precio_actual, v_abono, v_pagos, v_historial, v_timestamps
+    from ordenes where id = p_orden_id;
+
+  if v_empresa_id is null then
+    raise exception 'Pedido no encontrado.';
+  end if;
+  if not exists (select 1 from seguridad_empresa where empresa_id = v_empresa_id and pin_autorizacion = p_pin) then
+    raise exception 'PIN incorrecto.';
+  end if;
+  if p_nuevo_precio > v_precio_actual then
+    raise exception 'Una nota de crédito solo puede bajar el precio.';
+  end if;
+
+  v_diferencia := greatest(0, coalesce(v_abono, 0) - p_nuevo_precio);
+  v_nuevo_abono := coalesce(v_abono, 0) - v_diferencia;
+  v_pagos := coalesce(v_pagos, '[]'::jsonb);
+  if v_diferencia > 0 then
+    v_pagos := v_pagos || jsonb_build_object(
+      'monto', -v_diferencia, 'metodo', p_metodo_devolucion, 'fecha', v_ahora, 'motivo', 'Devolución por nota de crédito (PIN)'
+    );
+  end if;
+  v_historial := coalesce(v_historial, '[]'::jsonb) || jsonb_build_object(
+    'texto', format('[Nota de crédito con PIN] Precio ajustado de $%s a $%s. Motivo: %s. Autorizado por: %s.',
+                     v_precio_actual, p_nuevo_precio, p_motivo, p_autorizado_por),
+    'fecha', v_ahora
+  );
+
+  -- autoriza este UPDATE puntual, saltándose el candado de rol para esta transacción
+  perform set_config('app.pin_autorizado', 'true', true);
+  update ordenes set
+    precio = p_nuevo_precio, abono = v_nuevo_abono, pagos = v_pagos,
+    historial = v_historial, estado = 'cancelado',
+    timestamps = coalesce(v_timestamps, '{}'::jsonb) || jsonb_build_object('cancelado', v_ahora)
+  where id = p_orden_id;
+
+  return jsonb_build_object('ok', true, 'diferencia_devuelta', v_diferencia);
+end;
+$$ language plpgsql security definer;
+
+grant execute on function aplicar_nota_credito_con_pin to authenticated;
+
+-- Variante para verificación por correo/contraseña real del administrador
+-- (no PIN compartido). Solo puede llamarla el servidor (service_role) — un
+-- usuario normal desde el navegador NO puede invocarla directo, así el
+-- candado real está en que solo la Edge Function "autorizar-nc-admin"
+-- tiene la llave para usarla, después de confirmar la contraseña del admin.
+create or replace function aplicar_nota_credito_verificada(
+  p_orden_id uuid, p_nuevo_precio numeric, p_motivo text,
+  p_autorizado_por text, p_metodo_devolucion text
+)
+returns jsonb as $$
+declare
+  v_precio_actual numeric;
+  v_abono numeric;
+  v_pagos jsonb;
+  v_historial jsonb;
+  v_timestamps jsonb;
+  v_diferencia numeric;
+  v_nuevo_abono numeric;
+  v_ahora timestamptz := now();
+begin
+  select precio, abono, pagos, historial, timestamps
+    into v_precio_actual, v_abono, v_pagos, v_historial, v_timestamps
+    from ordenes where id = p_orden_id;
+
+  if v_precio_actual is null then
+    raise exception 'Pedido no encontrado.';
+  end if;
+  if p_nuevo_precio > v_precio_actual then
+    raise exception 'Una nota de crédito solo puede bajar el precio.';
+  end if;
+
+  v_diferencia := greatest(0, coalesce(v_abono, 0) - p_nuevo_precio);
+  v_nuevo_abono := coalesce(v_abono, 0) - v_diferencia;
+  v_pagos := coalesce(v_pagos, '[]'::jsonb);
+  if v_diferencia > 0 then
+    v_pagos := v_pagos || jsonb_build_object(
+      'monto', -v_diferencia, 'metodo', p_metodo_devolucion, 'fecha', v_ahora, 'motivo', 'Devolución por nota de crédito (verificada)'
+    );
+  end if;
+  v_historial := coalesce(v_historial, '[]'::jsonb) || jsonb_build_object(
+    'texto', format('[Nota de crédito verificada] Precio ajustado de $%s a $%s. Motivo: %s. Autorizado por: %s (contraseña de administrador verificada).',
+                     v_precio_actual, p_nuevo_precio, p_motivo, p_autorizado_por),
+    'fecha', v_ahora
+  );
+
+  perform set_config('app.pin_autorizado', 'true', true);
+  update ordenes set
+    precio = p_nuevo_precio, abono = v_nuevo_abono, pagos = v_pagos,
+    historial = v_historial, estado = 'cancelado',
+    timestamps = coalesce(v_timestamps, '{}'::jsonb) || jsonb_build_object('cancelado', v_ahora)
+  where id = p_orden_id;
+
+  return jsonb_build_object('ok', true, 'diferencia_devuelta', v_diferencia);
+end;
+$$ language plpgsql security definer;
+
+revoke all on function aplicar_nota_credito_verificada from public, authenticated, anon;
+grant execute on function aplicar_nota_credito_verificada to service_role;
+
 
 -- ============================================================
 -- ROW LEVEL SECURITY — aislamiento automático por empresa
@@ -224,6 +378,7 @@ alter table turnos enable row level security;
 alter table cierres_diarios enable row level security;
 alter table configuracion enable row level security;
 alter table empleados enable row level security;
+alter table solicitudes_nc enable row level security;
 
 -- Política estándar reutilizable: solo empresas del usuario autenticado
 create policy tenant_isolation on ordenes for all
@@ -241,6 +396,8 @@ create policy tenant_isolation on cierres_diarios for all
 create policy tenant_isolation on configuracion for all
   using (empresa_id in (select empresas_del_usuario()));
 create policy tenant_isolation on empleados for all
+  using (empresa_id in (select empresas_del_usuario()));
+create policy tenant_isolation on solicitudes_nc for all
   using (empresa_id in (select empresas_del_usuario()));
 
 -- usuarios_empresas: cada usuario solo ve sus propias membresías

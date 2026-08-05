@@ -128,21 +128,44 @@ export async function archivarOrden(ordenId) {
   return data;
 }
 
-/** Nota de crédito: reduce el precio de una orden ya facturada, dejando
- *  registro del motivo. Requiere ser encargado o admin — el candado real
- *  está en un trigger de la base de datos, esto es solo la llamada. */
-export async function aplicarNotaCredito(ordenId, nuevoPrecio, motivo) {
+/** Nota de crédito: reduce el precio de una orden ya facturada, la cierra
+ *  como cancelada, y si el cliente ya había pagado más de lo nuevo, registra
+ *  la devolución como un pago negativo (para que la cuadratura de caja en
+ *  Ventas refleje la plata que salió). Requiere ser encargado o admin —
+ *  el candado real está en un trigger de la base de datos. */
+export async function aplicarNotaCredito(ordenId, nuevoPrecio, motivo, metodoDevolucion) {
   const { data: actual, error: errLectura } = await supabase
-    .from('ordenes').select('precio, historial').eq('id', ordenId).single();
+    .from('ordenes').select('precio, abono, pagos, historial, timestamps').eq('id', ordenId).single();
   if (errLectura) throw errLectura;
 
   const ahora = new Date().toISOString();
+  const diferenciaDevuelta = Math.max(0, (actual.abono || 0) - nuevoPrecio);
+  const pagos = [...(actual.pagos || [])];
+  if (diferenciaDevuelta > 0) {
+    pagos.push({
+      monto: -diferenciaDevuelta,
+      metodo: metodoDevolucion || 'Efectivo',
+      fecha: ahora,
+      motivo: 'Devolución por nota de crédito',
+    });
+  }
+  const nuevoAbono = (actual.abono || 0) - diferenciaDevuelta;
+
   const historial = [...(actual.historial || []), {
-    texto: `[Nota de crédito] Precio ajustado de $${actual.precio} a $${nuevoPrecio}. Motivo: ${motivo}`,
+    texto: `[Nota de crédito] Precio ajustado de $${actual.precio} a $${nuevoPrecio}. Motivo: ${motivo}.`
+      + (diferenciaDevuelta > 0 ? ` Se devolvieron $${diferenciaDevuelta} (${metodoDevolucion}).` : '')
+      + ' Orden cancelada automáticamente.',
     fecha: ahora,
   }];
-  const { data, error } = await supabase.from('ordenes')
-    .update({ precio: nuevoPrecio, historial }).eq('id', ordenId).select().single();
+
+  const { data, error } = await supabase.from('ordenes').update({
+    precio: nuevoPrecio,
+    abono: nuevoAbono,
+    pagos,
+    historial,
+    estado: 'cancelado',
+    timestamps: { ...actual.timestamps, cancelado: ahora },
+  }).eq('id', ordenId).select().single();
   if (error) throw error;
   return data;
 }

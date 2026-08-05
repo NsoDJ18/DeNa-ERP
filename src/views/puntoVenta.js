@@ -3,6 +3,8 @@ import { listarClientes } from '../data/clientes.js';
 import { listarVentasDeHoy, registrarVenta, kpisDelDia } from '../data/ventasMostrador.js';
 import { listarAbonosDelDia } from '../data/ordenes.js';
 import { cargarTurnosDelDia, turnoAbiertoVigente } from '../data/turnos.js';
+import { buscarOrdenPorFolio, aplicarNotaCreditoVerificada } from '../data/seguridad.js';
+import { abrirModal, cerrarModal } from '../lib/modal.js';
 import { escapeHtml, money, todayStr, toast } from '../lib/util.js';
 
 let carrito = [];
@@ -49,6 +51,14 @@ export async function renderPuntoVenta(contenedor) {
     </div>
 
     <div class="stats" id="pv-kpis" style="margin-top:22px;"></div>
+
+    <div class="tarjeta" style="margin-top:22px;max-width:520px;">
+      <h3 style="margin-top:0;">🧾 Nota de crédito / anular pedido</h3>
+      <p class="subtitulo" style="margin-bottom:12px;">Busca el pedido por folio, propone el nuevo precio, y un administrador lo valida ahí mismo con su correo y contraseña reales. Se aplica al instante, sin cola de espera.</p>
+      <div class="campo"><label>Folio del pedido</label><input type="text" id="nc-folio" placeholder="Ej: OT-0012"></div>
+      <button class="boton boton-ghost" id="btn-buscar-folio-nc" style="width:auto;padding:8px 16px;">Buscar</button>
+      <div id="nc-resultado" style="margin-top:14px;"></div>
+    </div>
 
     <div style="margin-top:10px;">
       <h3 style="font-size:15px;margin-bottom:10px;">Movimientos de caja de hoy</h3>
@@ -143,6 +153,91 @@ export async function renderPuntoVenta(contenedor) {
 
   pintarCarrito();
   await pintarHistorialYKpis();
+
+  document.getElementById('btn-buscar-folio-nc').onclick = async () => {
+    const folio = document.getElementById('nc-folio').value.trim();
+    const resEl = document.getElementById('nc-resultado');
+    if (!folio) { toast('Escribe un folio'); return; }
+    resEl.innerHTML = '<span style="color:var(--ink-soft);font-size:13px;">Buscando…</span>';
+    try {
+      const orden = await buscarOrdenPorFolio(folio);
+      if (!orden) { resEl.innerHTML = '<span style="color:#9B2C2C;font-size:13px;">No se encontró ese folio.</span>'; return; }
+      if (orden.estado === 'cancelado') { resEl.innerHTML = '<span style="color:#9B2C2C;font-size:13px;">Ese pedido ya está cancelado.</span>'; return; }
+      pintarFormularioNC(orden);
+    } catch (e) {
+      console.error(e);
+      resEl.innerHTML = '<span style="color:#9B2C2C;font-size:13px;">Error al buscar.</span>';
+    }
+  };
+
+  function pintarFormularioNC(orden) {
+    const resEl = document.getElementById('nc-resultado');
+    resEl.innerHTML = `
+      <div style="background:var(--bg-soft);border-radius:10px;padding:12px;">
+        <div style="font-weight:600;margin-bottom:6px;"><span class="mono" style="color:var(--gold);">${orden.folio}</span> — ${escapeHtml(orden.cliente)}</div>
+        <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Precio actual: ${money(orden.precio)} · Abonado: ${money(orden.abono)}</div>
+        <div class="grid-2">
+          <div class="campo"><label>Nuevo precio</label><input type="number" id="nc-precio" min="0" value="${orden.precio}"></div>
+          <div class="campo"><label>Motivo *</label><input type="text" id="nc-motivo" placeholder="Ej: producto defectuoso"></div>
+        </div>
+        <div class="campo"><label>Devolver diferencia en (si corresponde)</label>
+          <select id="nc-metodo"><option>Efectivo</option><option>Transferencia</option><option>Débito</option><option>Crédito</option><option>Otro</option></select>
+        </div>
+        <button class="boton boton-oro" id="btn-pedir-pin" style="width:auto;padding:9px 18px;">Solicitar autorización de administrador</button>
+      </div>`;
+
+    document.getElementById('btn-pedir-pin').onclick = () => {
+      const nuevoPrecio = Number(document.getElementById('nc-precio').value);
+      const motivo = document.getElementById('nc-motivo').value.trim();
+      const metodoDevolucion = document.getElementById('nc-metodo').value;
+      if (isNaN(nuevoPrecio) || nuevoPrecio < 0) { toast('Precio inválido'); return; }
+      if (nuevoPrecio > orden.precio) { toast('Una nota de crédito solo puede bajar el precio'); return; }
+      if (!motivo) { toast('Escribe el motivo'); return; }
+      abrirModalPin(orden, nuevoPrecio, motivo, metodoDevolucion);
+    };
+  }
+
+  function abrirModalPin(orden, nuevoPrecio, motivo, metodoDevolucion) {
+    abrirModal(`
+      <h3 style="margin-top:0;color:var(--navy);">Autorización de un administrador</h3>
+      <p style="color:var(--ink-soft);font-size:13.5px;">
+        Solo un <b>administrador</b> puede autorizar esto — no un encargado de turno.
+        Pídele que escriba su propio correo y contraseña acá mismo, en el mostrador.
+        Se verifica de verdad contra su cuenta, no es un código compartido.
+      </p>
+      <div class="campo"><label>Correo del administrador</label><input type="email" id="admin-email" autofocus></div>
+      <div class="campo"><label>Contraseña</label><input type="password" id="admin-password"></div>
+      <div class="error" id="pin-error"></div>
+      <div class="pie-formulario">
+        <button class="boton boton-ghost" id="btn-pin-cancelar">Cancelar</button>
+        <button class="boton boton-oro" id="btn-pin-validar">Verificar y aplicar</button>
+      </div>
+    `);
+    document.getElementById('btn-pin-cancelar').onclick = () => cerrarModal();
+    document.getElementById('btn-pin-validar').onclick = async (ev) => {
+      const email = document.getElementById('admin-email').value.trim();
+      const password = document.getElementById('admin-password').value;
+      const errBox = document.getElementById('pin-error');
+      errBox.classList.remove('visible');
+      if (!email || !password) { errBox.textContent = 'Completa el correo y la contraseña.'; errBox.classList.add('visible'); return; }
+      ev.target.disabled = true; ev.target.textContent = 'Verificando…';
+      try {
+        await aplicarNotaCreditoVerificada({
+          email, password, ordenId: orden.id, nuevoPrecio, motivo, metodoDevolucion,
+        });
+        toast('Nota de crédito aplicada, pedido cancelado');
+        cerrarModal();
+        document.getElementById('nc-folio').value = '';
+        document.getElementById('nc-resultado').innerHTML = '';
+      } catch (e) {
+        console.error(e);
+        errBox.textContent = e.message || 'No se pudo verificar al administrador.';
+        errBox.classList.add('visible');
+      } finally {
+        ev.target.disabled = false; ev.target.textContent = 'Verificar y aplicar';
+      }
+    };
+  }
 
   function pintarCarrito() {
     const wrap = document.getElementById('pv-carrito');

@@ -28,3 +28,10 @@ export async function guardarSucursal(sucursalTexto) {
     .from('empresas').update({ sucursal_texto: sucursalTexto }).eq('id', empresaActivaId());
   if (error) throw error;
 }
+
+/** Cambia "DENA ERP" por el nombre del negocio en el menú (Plata/Oro, solo admin por RLS). */
+export async function guardarNombreApp(nombreApp) {
+  const { error } = await supabase
+    .from('empresas').update({ nombre_app: nombreApp || null }).eq('id', empresaActivaId());
+  if (error) throw error;
+}

@@ -27,6 +27,9 @@ supabase secrets set TBK_COMMERCE_CODE=597055555532
 supabase secrets set TBK_API_KEY=579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C
 supabase secrets set TBK_ENVIRONMENT=integracion
 
+# La URL pública de tu sitio (necesaria para el regreso del pago con tarjeta):
+supabase secrets set FRONTEND_URL=https://denaerp.netlify.app
+
 # WhatsApp Business (Meta) — ver paso 5 para obtener estos valores:
 supabase secrets set WHATSAPP_TOKEN=tu-token-de-meta
 supabase secrets set WHATSAPP_PHONE_ID=tu-id-de-numero
@@ -42,8 +45,11 @@ funciones de servidor, nunca en el frontend.
 ```bash
 supabase functions deploy crear-transaccion-webpay
 supabase functions deploy confirmar-transaccion-webpay
+supabase functions deploy recibir-pago-webpay
 supabase functions deploy notificar-whatsapp
 supabase functions deploy chequeo-no-retirados
+supabase functions deploy invitar-miembro
+supabase functions deploy autorizar-nc-admin
 ```
 
 Cada una queda disponible en:

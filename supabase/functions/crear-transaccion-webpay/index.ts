@@ -1,8 +1,9 @@
 // supabase/functions/crear-transaccion-webpay/index.ts
 //
-// Crea una transacción de pago con Webpay Plus (Transbank) para una orden
-// o venta, y devuelve la URL a la que hay que redirigir al cliente para
-// que pague con su tarjeta.
+// Crea una transacción de pago con Webpay Plus (Transbank) para una orden,
+// y devuelve el token + la URL base a la que el FRONTEND debe redirigir al
+// cliente (con un formulario POST, no pegando el token en la URL — así lo
+// exige Transbank).
 //
 // Variables de entorno necesarias (configurar con `supabase secrets set`):
 //   TBK_COMMERCE_CODE  → código de comercio (usa el de integración para probar)
@@ -31,15 +32,22 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
-    const { ordenId, monto, returnUrl } = await req.json();
-    if (!ordenId || !monto || !returnUrl) {
-      return jsonResponse({ error: 'Faltan datos: ordenId, monto y returnUrl son obligatorios.' }, 400);
+    const { ordenId, monto } = await req.json();
+    if (!ordenId || !monto) {
+      return jsonResponse({ error: 'Faltan datos: ordenId y monto son obligatorios.' }, 400);
     }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    // El regreso siempre pasa por recibir-pago-webpay (una función nuestra,
+    // no el sitio estático directo) — Transbank vuelve con un POST, y un
+    // sitio estático no puede leer el cuerpo de un POST. Esa función
+    // recibe el POST y redirige al sitio real con el token como parámetro
+    // GET, que el frontend sí puede leer.
+    const returnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/recibir-pago-webpay`;
 
     // buyOrder y sessionId deben ser únicos y de máx. 26 caracteres para Transbank
     const buyOrder = `OT-${ordenId}`.slice(0, 26);
@@ -74,7 +82,10 @@ Deno.serve(async (req) => {
       .update({ pago_pendiente_token: token })
       .eq('id', ordenId);
 
-    return jsonResponse({ token, url: `${url}?token_ws=${token}` });
+    // El frontend arma un <form method="POST" action="url"> con token_ws=token
+    // y lo envía — NUNCA se pega el token en la URL como texto, Transbank
+    // rechaza eso.
+    return jsonResponse({ token, url });
   } catch (e) {
     console.error(e);
     return jsonResponse({ error: 'Error interno al crear la transacción.' }, 500);

@@ -1,10 +1,10 @@
 // supabase/functions/confirmar-transaccion-webpay/index.ts
 //
-// Transbank redirige al cliente de vuelta a tu returnUrl con un parámetro
-// token_ws por POST. Esa página del frontend debe llamar a esta función
-// para "confirmar" (commit) la transacción y saber si el pago fue exitoso.
-//
-// Mismas variables de entorno que crear-transaccion-webpay.
+// El frontend vuelve del banco solo con "token_ws" (no sabe el ID interno
+// del pedido) — esta función lo busca sola por ese token, confirma
+// ("commit") la transacción con Transbank, y si el pago fue aprobado,
+// registra el pago en el pedido. Devuelve los datos del pedido para que
+// el frontend muestre folio/cliente sin tener que consultarlo aparte.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { CORS_HEADERS, jsonResponse } from '../_compartido/http.ts';
@@ -17,9 +17,18 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
-    const { token, ordenId, metodoPago } = await req.json();
-    if (!token || !ordenId) {
-      return jsonResponse({ error: 'Faltan datos: token y ordenId son obligatorios.' }, 400);
+    const { token } = await req.json();
+    if (!token) return jsonResponse({ error: 'Falta el token.' }, 400);
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    const { data: orden, error: errOrden } = await supabase
+      .from('ordenes').select('*').eq('pago_pendiente_token', token).maybeSingle();
+    if (errOrden || !orden) {
+      return jsonResponse({ error: 'No encontramos un pedido esperando este pago (¿ya se confirmó antes?).' }, 404);
     }
 
     const resp = await fetch(
@@ -37,34 +46,38 @@ Deno.serve(async (req) => {
     if (!resp.ok) {
       const detalle = await resp.text();
       console.error('Transbank rechazó la confirmación:', detalle);
-      return jsonResponse({ error: 'No se pudo confirmar la transacción.', detalle }, 502);
+      return jsonResponse({ error: 'No se pudo confirmar la transacción con Transbank.', detalle }, 502);
     }
 
     const resultado = await resp.json();
     // response_code === 0 y status === 'AUTHORIZED' = pago aprobado
     const aprobado = resultado.response_code === 0 && resultado.status === 'AUTHORIZED';
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
     if (aprobado) {
-      const { data: orden } = await supabase.from('ordenes').select('pagos, abono').eq('id', ordenId).single();
+      const metodoPago = resultado.payment_type_code === 'VD' ? 'Débito' : 'Crédito';
+      const nuevoAbono = (orden.abono || 0) + resultado.amount;
       const nuevoPago = {
-        monto: resultado.amount,
-        metodo: metodoPago || (resultado.payment_type_code === 'VD' ? 'Débito' : 'Crédito'),
-        fecha: new Date().toISOString(),
+        monto: resultado.amount, metodo: metodoPago, fecha: new Date().toISOString(),
         folioTBK: String(resultado.authorization_code),
       };
+      const saldoRestante = (orden.precio || 0) - nuevoAbono;
+
       await supabase.from('ordenes').update({
-        pagos: [...(orden?.pagos || []), nuevoPago],
-        abono: (orden?.abono || 0) + resultado.amount,
+        pagos: [...(orden.pagos || []), nuevoPago],
+        abono: nuevoAbono,
         pago_pendiente_token: null,
-      }).eq('id', ordenId);
+        // si con este pago quedó todo cubierto y el pedido ya estaba
+        // "listo", lo cerramos directo — igual que la entrega con pago manual
+        ...(saldoRestante <= 0 && orden.estado === 'listo'
+          ? { estado: 'entregado', timestamps: { ...orden.timestamps, entregado: new Date().toISOString() } }
+          : {}),
+      }).eq('id', orden.id);
     }
 
-    return jsonResponse({ aprobado, detalle: resultado });
+    return jsonResponse({
+      aprobado, detalle: resultado,
+      orden: { folio: orden.folio, cliente: orden.cliente },
+    });
   } catch (e) {
     console.error(e);
     return jsonResponse({ error: 'Error interno al confirmar la transacción.' }, 500);

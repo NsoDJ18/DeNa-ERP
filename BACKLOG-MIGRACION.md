@@ -134,3 +134,37 @@ problema, la del PIN simplemente queda sin uso).
 ```
 supabase functions deploy autorizar-nc-admin
 ```
+
+## 🆕 Pago con tarjeta (Transbank) conectado a la interfaz
+
+- Botón **"💳 Pagar con tarjeta (Webpay)"** dentro del modal de "Cerrar como
+  entregado" (Estado y Torre de control) — junto a la opción de registrar
+  el pago a mano, no la reemplaza.
+- **Bug real corregido**: la función original pegaba el token en la URL
+  como texto (`?token_ws=...`), que no es como Transbank lo exige — ahora
+  se manda por formulario POST, como corresponde.
+- **Nueva función `recibir-pago-webpay`**: como el sitio es estático
+  (Netlify), no puede leer el POST con el que Transbank vuelve — esta
+  función lo recibe y redirige al sitio real con el token como parámetro
+  de URL, que sí se puede leer.
+- **Nueva pantalla `#confirmar-pago`**: aparece sola cuando el cliente
+  vuelve del banco, confirma el pago, y si el pedido queda sin saldo y
+  estaba "Listo", se cierra como entregado automático — mismo criterio que
+  el pago manual.
+
+**Para que funcione de verdad, en tu laptop:**
+1. Corre `migracion_pagos_tbk.sql` si no lo habías hecho (ya existía)
+2. `supabase secrets set FRONTEND_URL=https://denaerp.netlify.app`
+3. Despliega las tres funciones de pago:
+   ```
+   supabase functions deploy crear-transaccion-webpay
+   supabase functions deploy confirmar-transaccion-webpay
+   supabase functions deploy recibir-pago-webpay
+   ```
+4. Prueba con la tarjeta de integración: VISA 4051885600446623, CVV 123,
+   cualquier fecha futura, RUT 11.111.111-1 / clave 123
+
+## ⬜ Verdaderamente pendiente ahora
+- Fotos de referencia en Recepción (Supabase Storage)
+- Nota de crédito para ventas de mostrador (hoy solo aplica a pedidos)
+- Desplegar notificar-whatsapp + configurar Cron de no retirados

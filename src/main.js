@@ -17,6 +17,7 @@ import { renderVentas } from './views/ventas.js';
 import { renderPuntoVenta } from './views/puntoVenta.js';
 import { renderAdmin } from './views/admin.js';
 import { renderMonitor } from './views/monitor.js';
+import { renderConfirmarPago } from './views/confirmarPago.js';
 import { tieneFuncion } from './planes.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
@@ -26,6 +27,7 @@ registrarRuta('hoy', renderHoy, 'hoy');
 registrarRuta('ventas', renderVentas, 'ventas');
 registrarRuta('punto_venta', renderPuntoVenta, 'punto_venta');
 registrarRuta('monitor', renderMonitor, 'monitor');
+registrarRuta('confirmar-pago', renderConfirmarPago); // sin "funcion": siempre accesible, es la vuelta del banco
 
 const NAV = [
   { ruta: 'recepcion', etiqueta: 'Recepción', funcion: 'recepcion' },

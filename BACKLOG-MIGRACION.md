@@ -168,3 +168,45 @@ supabase functions deploy autorizar-nc-admin
 - Fotos de referencia en Recepción (Supabase Storage)
 - Nota de crédito para ventas de mostrador (hoy solo aplica a pedidos)
 - Desplegar notificar-whatsapp + configurar Cron de no retirados
+
+## 🆕 Reestructuración de planes + Super Admin TI
+
+### ✅ Nuevo: cuenta de soporte/pruebas con acceso total
+- Tabla `ti_super_admins` — el correo autorizado vive ahí, **editable
+  directo en Supabase sin tocar código ni desplegar nada**.
+- `c.medinagodoy@gmail.com` ya está cargado como el primero.
+- Esta cuenta ve TODAS las pantallas en las empresas donde esté vinculada,
+  sin importar el plan contratado — pero sigue necesitando estar vinculada
+  a cada empresa (RLS sigue exigiendo pertenencia, esto no salta seguridad
+  de datos, solo el filtro de plan).
+- **Para cambiar el correo en el futuro**: edita la tabla `ti_super_admins`
+  en Table Editor, no este proyecto.
+
+### ✅ Planes reestructurados
+| | Bronce | Plata | Oro |
+|---|---|---|---|
+| Usuarios | hasta 3 | hasta 11 | sin límite (**ahora sí se aplica de verdad**) |
+| Recepción, Bodega, Ventas, Punto de venta, Monitor | ✅ | ✅ | ✅ |
+| Estado, Torre, Hoy | ❌ | ✅ | ✅ |
+| Admin: Resumen, Solicitudes NC, Equipo (solo ver) | ✅ | ✅ | ✅ |
+| Admin: cambiar jerarquías + Empleados | ❌ (solo TI) | ✅ | ✅ |
+| Admin: nombre de sucursal | ❌ | ✅ | ✅ |
+| Nombre de la app personalizable | ❌ | ✅ | ✅ |
+| Marca propia (pendiente de construir) | ❌ | ❌ | ✅ |
+
+**Monitor ahora está en los 3 planes** — es el enganche comercial, según
+lo conversado.
+
+### ✅ Candados reales agregados (no solo interfaz)
+- Límite de usuarios por plan, aplicado en la función `invitar-miembro`
+  (con excepción para la cuenta TI, que no tiene tope)
+- Cambiar jerarquías en Bronce está bloqueado también a nivel de base de
+  datos (trigger), no solo el selector escondido
+
+### Migraciones nuevas (en orden)
+```
+migracion_ti_super_admin.sql
+migracion_restriccion_roles_bronce.sql
+```
+(Corre la primera antes que la segunda — la segunda depende de que exista
+la tabla de la primera.)

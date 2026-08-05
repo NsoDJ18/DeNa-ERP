@@ -230,6 +230,32 @@ create table solicitudes_nc (
 );
 create index idx_solicitudes_nc_empresa on solicitudes_nc(empresa_id, estado);
 
+-- ---------- 13. SUPER ADMIN TI (soporte/pruebas — bypass de plan, no de RLS) ----------
+-- Guardado como dato, no en el código: si el correo de soporte cambia, se
+-- edita esta tabla directo en Supabase (Table Editor), sin tocar ni
+-- desplegar nada. Esto NO salta la seguridad de datos (RLS sigue
+-- exigiendo pertenecer a la empresa) — solo hace que, en las empresas
+-- donde esta persona SÍ está vinculada, vea todas las pantallas sin
+-- importar el plan contratado. Sirve para pruebas y soporte técnico.
+create table ti_super_admins (
+  email      text primary key,
+  nota       text,
+  creado_en  timestamptz default now()
+);
+alter table ti_super_admins enable row level security;
+-- sin política de SELECT: nadie puede leer la lista completa por la API,
+-- cada quien solo puede preguntar "¿SOY yo?" a través de la función de abajo.
+
+create or replace function soy_super_admin_ti()
+returns boolean as $$
+  select exists (select 1 from ti_super_admins where email = auth.email());
+$$ language sql stable security definer;
+
+grant execute on function soy_super_admin_ti to authenticated;
+
+insert into ti_super_admins (email, nota) values
+  ('c.medinagodoy@gmail.com', 'Responsable de pruebas de funcionamiento, administración y soporte TI');
+
 -- ---------- 12. PIN DE AUTORIZACIÓN (para validar en el momento, sin cola de espera) ----------
 -- Tabla separada a propósito: nadie puede LEER el pin directo por la API
 -- (ni con RLS "for all", porque no hay ninguna política de SELECT acá) —
@@ -409,6 +435,31 @@ create policy admin_ve_su_equipo on usuarios_empresas for select
   using (es_admin_de(empresa_id));
 create policy admin_edita_roles on usuarios_empresas for update
   using (es_admin_de(empresa_id));
+
+-- Candado real: en plan Bronce, ni siquiera el admin de esa empresa puede
+-- cambiar jerarquías desde acá (según el diseño de planes) — solo lo hace
+-- soporte TI. No es solo que el selector esté oculto en la interfaz: si
+-- alguien intentara el cambio directo por la API, esto lo rechaza igual.
+create or replace function bloquear_cambio_rol_sin_plan()
+returns trigger as $$
+declare
+  v_plan text;
+begin
+  if new.rol is distinct from old.rol
+     and coalesce((select email from auth.users where id = auth.uid()), '') not in (select email from ti_super_admins)
+  then
+    select plan into v_plan from empresas where id = new.empresa_id;
+    if v_plan = 'bronce' then
+      raise exception 'Tu plan no permite cambiar jerarquías del equipo — contacta a soporte.';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger trg_bloquear_cambio_rol
+  before update on usuarios_empresas
+  for each row execute function bloquear_cambio_rol_sin_plan();
 
 -- empresas: un usuario puede ver (y un admin editar) solo las empresas
 -- a las que pertenece — sin esto, RLS bloquea todo por defecto y el

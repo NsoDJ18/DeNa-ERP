@@ -4,61 +4,64 @@
 // el menú de navegación y el resto de la app leen de acá.
 // ============================================================
 //
-// MAPA función → dónde vive (todas ya migradas y funcionando):
+// MAPA función → dónde vive:
 //
-//   recepcion       → src/views/recepcion.js       (crear pedidos, ticket, PDF, etiqueta)
-//   estado          → src/views/estado.js          (buscar, avanzar, entregar, nota de crédito)
-//   torre           → src/views/torre.js           (tablero de producción, 5 estaciones)
-//   hoy             → src/views/hoy.js             (atrasados / vencen / recibidos / entregados hoy)
-//   bodega          → src/views/bodega.js          (inventario, CSV, precios protegidos)
-//   ventas          → src/views/ventas.js          (turnos, cuadratura de caja)
-//   punto_venta     → src/views/puntoVenta.js       (mostrador, clientes frecuentes, NC con PIN)
-//   monitor         → src/views/monitor.js         (pantalla TV / autoservicio cliente)
-//   admin_resumen   → src/views/admin.js           (KPIs, Excel, Solicitudes NC, Equipo, Empleados, Configuración — un solo panel, todas las sub-pestañas comparten esta función)
-//   nombre_app      → src/main.js                  ("DENA ERP" en el menú se reemplaza por el nombre configurado en Administración → Configuración)
-//   marca_propia    → (pendiente de construir)     (logo y color propios, blanco total, ver backlog)
+//   recepcion            → src/views/recepcion.js
+//   estado               → src/views/estado.js          (Plata+)
+//   torre                → src/views/torre.js            (Plata+)
+//   hoy                  → src/views/hoy.js              (Plata+)
+//   bodega               → src/views/bodega.js
+//   ventas               → src/views/ventas.js
+//   punto_venta          → src/views/puntoVenta.js
+//   monitor              → src/views/monitor.js          (TODOS los planes — es el enganche comercial)
+//   admin_resumen        → src/views/admin.js            (Resumen + Solicitudes NC + lista de Equipo + tiempos máximos)
+//   admin_gestion_equipo → src/views/admin.js            (Plata+: editar jerarquía + pestaña Empleados)
+//   admin_sucursal       → src/views/admin.js            (Plata+: nombre del local/sucursal)
+//   nombre_app           → src/main.js                   (Plata+: cambiar "DENA ERP" por el nombre del negocio)
+//   marca_propia         → (pendiente de construir)      (Oro: logo y color propios)
+//   soporte_prioritario  → (no es pantalla, es compromiso comercial tuyo)
 //
-// Cada pantalla es un archivo independiente: se puede editar, reescribir o
-// borrar una sin afectar el resto. La única conexión entre todas es este
-// archivo (qué plan la ve) y src/main.js (el botón del menú + la ruta).
+// El correo de soporte/pruebas con acceso a TODO sin importar el plan
+// vive en la tabla `ti_super_admins` de Supabase — no acá. Para
+// cambiarlo, edita esa tabla directo en Supabase, no este archivo.
 
 export const PLANES = {
   bronce: {
     etiqueta: 'Bronce',
     precioMensual: 35900,
-    descripcion: 'Lo esencial para ordenar tu producción',
+    descripcion: 'Lo esencial para operar el mostrador y la producción',
     funciones: [
       'recepcion',
-      'estado',
-      'torre',
-      'hoy',
+      'bodega',
+      'ventas',
+      'punto_venta',
+      'monitor',
+      'admin_resumen',
     ],
-    limiteUsuarios: 1,
+    limiteUsuarios: 3, // 1 admin + 2 trabajadores
   },
   plata: {
     etiqueta: 'Plata',
     precioMensual: 64900,
     descripcion: 'Gestión administrativa completa',
     funciones: [
-      'recepcion', 'estado', 'torre', 'hoy',
-      'bodega',          // control de stock con alertas
-      'ventas',          // cuadratura de caja por turno
-      'punto_venta',     // ventas de mostrador + nota de crédito con PIN
-      'admin_resumen',   // KPIs, Excel, Solicitudes NC, Equipo, Empleados, Configuración
-      'nombre_app',       // cambiar "DENA ERP" por el nombre del negocio
+      'recepcion', 'bodega', 'ventas', 'punto_venta', 'monitor', 'admin_resumen',
+      'estado', 'torre', 'hoy',
+      'admin_gestion_equipo',
+      'admin_sucursal',
+      'nombre_app',
     ],
-    limiteUsuarios: 3,
+    limiteUsuarios: 11, // 1 admin + 10 trabajadores
   },
   oro: {
     etiqueta: 'Oro',
     precioMensual: 104900,
-    descripcion: 'Control total, en tiempo real',
+    descripcion: 'Acceso completo, sin restricciones',
     funciones: [
-      'recepcion', 'estado', 'torre', 'hoy',
-      'bodega', 'ventas', 'punto_venta', 'admin_resumen', 'nombre_app',
-      'monitor',              // pantalla de producción para TV / autoservicio del cliente
-      'marca_propia',         // logo y color propios (pendiente de construir)
-      'soporte_prioritario',  // no es una pantalla, es un compromiso comercial
+      'recepcion', 'bodega', 'ventas', 'punto_venta', 'monitor', 'admin_resumen',
+      'estado', 'torre', 'hoy', 'admin_gestion_equipo', 'admin_sucursal', 'nombre_app',
+      'marca_propia',
+      'soporte_prioritario',
     ],
     limiteUsuarios: null, // sin límite
   },
@@ -81,4 +84,9 @@ export function funcionesDelPlan(plan) {
 /** Todas las funciones que existen en algún plan (para armar comparativas). */
 export function todasLasFunciones() {
   return [...new Set(Object.values(PLANES).flatMap((p) => p.funciones))];
+}
+
+/** Límite de usuarios del plan (null = sin límite). */
+export function limiteUsuarios(plan) {
+  return PLANES[plan]?.limiteUsuarios ?? PLANES['bronce'].limiteUsuarios;
 }

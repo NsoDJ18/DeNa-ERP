@@ -112,3 +112,25 @@ export function rolActivo() {
 export function puedeAutorizar() {
   return _rolActivo === 'admin' || _rolActivo === 'encargado';
 }
+
+// ============================================================
+// SUPER ADMIN TI (soporte/pruebas — ve todas las pantallas de cualquier
+// plan, en las empresas donde esté vinculado). El correo autorizado vive
+// como dato en la tabla ti_super_admins, editable en Supabase sin tocar
+// código.
+// ============================================================
+let _esSuperAdminTI = false;
+
+export function esSuperAdminTI() {
+  return _esSuperAdminTI;
+}
+
+export async function verificarSuperAdminTI() {
+  try {
+    const { data, error } = await supabase.rpc('soy_super_admin_ti');
+    _esSuperAdminTI = !error && !!data;
+  } catch (e) {
+    _esSuperAdminTI = false;
+  }
+  return _esSuperAdminTI;
+}

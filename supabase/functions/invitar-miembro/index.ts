@@ -2,7 +2,8 @@
 //
 // Permite que un admin vincule a alguien que YA se registró (con su propio
 // correo, desde el login normal) a su empresa, con un rol asignado — sin
-// tener que entrar a Supabase directamente.
+// tener que entrar a Supabase directamente. Respeta el límite de usuarios
+// de cada plan (mantener sincronizado con src/planes.js si cambian los números).
 //
 // El front-end llama a esta función con su propio token de sesión (Authorization:
 // Bearer <token del admin>). La función usa la service_role key SOLO del lado
@@ -11,6 +12,9 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { CORS_HEADERS, jsonResponse } from '../_compartido/http.ts';
+
+// Debe coincidir con src/planes.js — si cambian los límites ahí, cámbialos acá también.
+const LIMITE_USUARIOS: Record<string, number | null> = { bronce: 3, plata: 11, oro: null };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
@@ -52,6 +56,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Solo un administrador puede invitar miembros.' }, 403);
     }
     const empresaId = miembresia.empresa_id;
+
+    // ¿Quien invita es soporte TI? Si lo es, no aplica el límite de usuarios
+    // (necesita poder entrar a cualquier empresa de prueba sin tope).
+    const { data: esTI } = await supabaseAdmin
+      .from('ti_super_admins').select('email').eq('email', user.email ?? '').maybeSingle();
+
+    if (!esTI) {
+      const { data: empresa } = await supabaseAdmin.from('empresas').select('plan').eq('id', empresaId).single();
+      const limite = LIMITE_USUARIOS[empresa?.plan ?? 'bronce'];
+      if (limite !== null) {
+        const { count } = await supabaseAdmin
+          .from('usuarios_empresas').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId);
+        if ((count ?? 0) >= limite) {
+          return jsonResponse({
+            error: `Tu plan (${empresa?.plan}) permite hasta ${limite} usuarios. Sube de plan para agregar más.`,
+          }, 403);
+        }
+      }
+    }
 
     // Busca al usuario objetivo por correo (debe haberse registrado antes).
     const { data: listado, error: errListado } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });

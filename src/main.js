@@ -6,6 +6,8 @@ import {
   alCambiarSesion,
   resolverEmpresaActiva,
   fijarEmpresaActiva,
+  verificarSuperAdminTI,
+  esSuperAdminTI,
 } from './auth/session.js';
 import { registrarRuta, iniciarRouter, configurarControlAcceso } from './router.js';
 import { renderRecepcion } from './views/recepcion.js';
@@ -151,7 +153,7 @@ function nombreMostrarApp(activa) {
 
 function renderAppShell(sesion, activa) {
   app.className = ''; // ya no es pantalla centrada
-  const navVisible = NAV.filter((n) => tieneFuncion(activa.plan, n.funcion) && (!n.soloAdmin || activa.rol === 'admin'));
+  const navVisible = NAV.filter((n) => (esSuperAdminTI() || tieneFuncion(activa.plan, n.funcion)) && (!n.soloAdmin || activa.rol === 'admin'));
   app.innerHTML = `
     <div class="app-shell">
       <div class="app-nav">
@@ -171,7 +173,7 @@ function renderAppShell(sesion, activa) {
 
   registrarRuta('bodega', (contenedor) => renderBodega(contenedor, activa), 'bodega');
   registrarRuta('admin', (contenedor) => renderAdmin(contenedor, activa), 'admin_resumen');
-  configurarControlAcceso((funcion) => tieneFuncion(activa.plan, funcion));
+  configurarControlAcceso((funcion) => esSuperAdminTI() || tieneFuncion(activa.plan, funcion));
   iniciarRouter();
 }
 
@@ -181,6 +183,8 @@ function renderAppShell(sesion, activa) {
 async function arrancar() {
   const sesion = await obtenerSesion();
   if (!sesion) { app.className = 'pantalla-centrada'; renderLogin('login'); return; }
+
+  await verificarSuperAdminTI();
 
   const { empresas, activa } = await resolverEmpresaActiva();
   if (empresas.length === 0) { app.className = 'pantalla-centrada'; renderSinEmpresa(); return; }

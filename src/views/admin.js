@@ -5,12 +5,13 @@ import { listarEquipo, cambiarRolMiembro, invitarMiembro } from '../data/equipo.
 import { listarSolicitudesPendientes, aprobarSolicitudNC, rechazarSolicitudNC } from '../data/notasCredito.js';
 import { obtenerTiemposMax, guardarTiemposMax, guardarSucursal, guardarNombreApp } from '../data/configuracion.js';
 import { tieneFuncion } from '../planes.js';
+import { esSuperAdminTI } from '../auth/session.js';
 import { escapeHtml, money, fdate, fdatetime, localDateStr, toast } from '../lib/util.js';
 
 let seccionActual = 'resumen';
 
 export async function renderAdmin(contenedor, activa) {
-  if (activa.rol !== 'admin') {
+  if (activa.rol !== 'admin' && !esSuperAdminTI()) {
     contenedor.innerHTML = `<div class="tarjeta" style="max-width:420px;margin:40px auto;text-align:center;">
       <h3 style="color:var(--navy);">Solo administradores</h3>
       <p style="color:var(--ink-soft);font-size:13px;">Tu cuenta no tiene permisos de administración en esta empresa.</p>
@@ -18,13 +19,15 @@ export async function renderAdmin(contenedor, activa) {
     return;
   }
 
+  const puedeGestionarEquipo = esSuperAdminTI() || tieneFuncion(activa.plan, 'admin_gestion_equipo');
+
   contenedor.innerHTML = `
     <div class="encabezado-vista"><h2>Administración</h2><p class="subtitulo">Todos los pedidos del taller</p></div>
     <div class="botones-sub" id="admin-subnav">
       <button data-sec="resumen" class="activo">📊 Resumen</button>
       <button data-sec="solicitudes">🧾 Solicitudes NC</button>
       <button data-sec="equipo">🧑‍💼 Equipo</button>
-      <button data-sec="empleados">👥 Empleados</button>
+      ${puedeGestionarEquipo ? '<button data-sec="empleados">👥 Empleados</button>' : ''}
       <button data-sec="configuracion">⚙️ Configuración</button>
     </div>
     <div id="admin-contenido"></div>
@@ -40,8 +43,8 @@ export async function renderAdmin(contenedor, activa) {
     const cont = document.getElementById('admin-contenido');
     if (seccionActual === 'resumen') return pintarResumen(cont);
     if (seccionActual === 'solicitudes') return pintarSolicitudes(cont, activa);
-    if (seccionActual === 'equipo') return pintarEquipo(cont);
-    if (seccionActual === 'empleados') return pintarEmpleados(cont);
+    if (seccionActual === 'equipo') return pintarEquipo(cont, puedeGestionarEquipo);
+    if (seccionActual === 'empleados') return puedeGestionarEquipo ? pintarEmpleados(cont) : pintarSinAcceso(cont);
     if (seccionActual === 'configuracion') return pintarConfiguracion(cont, activa);
   }
 }
@@ -196,6 +199,10 @@ async function pintarResumen(cont) {
 // ============================================================
 // EMPLEADOS
 // ============================================================
+function pintarSinAcceso(cont) {
+  cont.innerHTML = `<div class="vacio" style="padding:30px;">Esta sección no está disponible en tu plan.</div>`;
+}
+
 // ============================================================
 // SOLICITUDES DE NOTA DE CRÉDITO (pendientes de autorizar)
 // ============================================================
@@ -273,22 +280,22 @@ async function pintarSolicitudes(cont, activa) {
 // ============================================================
 // EQUIPO: jerarquías (admin / encargado de turno / trabajador)
 // ============================================================
-async function pintarEquipo(cont) {
+async function pintarEquipo(cont, puedeGestionarEquipo) {
   cont.innerHTML = `
     <div class="tarjeta" style="max-width:560px;margin-bottom:22px;">
       <h3 style="margin-top:0;">Vincular a alguien nuevo</h3>
       <p class="subtitulo" style="margin-bottom:14px;">
         La persona debe registrarse primero por su cuenta desde la pantalla de login
         (correo propio). Una vez que lo haga, la vinculas acá por su correo.
+        ${!puedeGestionarEquipo ? '<br><b>Tu plan solo permite vincular trabajadores.</b> Para agregar otro administrador o encargado de turno, contacta a soporte.' : ''}
       </p>
       <div class="campo"><label>Correo con el que se registró</label><input type="email" id="inv-email" placeholder="persona@correo.com"></div>
       <div class="grid-2">
         <div class="campo"><label>Nombre a mostrar</label><input type="text" id="inv-nombre" placeholder="Ej: Camila Fuentes"></div>
         <div class="campo"><label>Jerarquía</label>
-          <select id="inv-rol">
+          <select id="inv-rol" ${puedeGestionarEquipo ? '' : 'disabled'}>
             <option value="trabajador">Trabajador</option>
-            <option value="encargado">Encargado de turno</option>
-            <option value="admin">Administrador</option>
+            ${puedeGestionarEquipo ? '<option value="encargado">Encargado de turno</option><option value="admin">Administrador</option>' : ''}
           </select>
         </div>
       </div>
@@ -302,6 +309,7 @@ async function pintarEquipo(cont) {
         <b>Trabajador</b>: uso normal del sistema. <b>Encargado de turno</b>: además puede
         cambiar precios y anular productos en Bodega, y aplicar notas de crédito.
         <b>Administrador</b>: acceso total.
+        ${!puedeGestionarEquipo ? '<br><b>Tu plan no permite cambiar jerarquías desde acá</b> — contacta a soporte si necesitas ajustar el rol de alguien.' : ''}
       </p>
       <div id="equipo-lista"></div>
     </div>
@@ -334,15 +342,18 @@ async function pintarEquipo(cont) {
 
   async function pintarLista() {
     const equipo = await listarEquipo();
+    const ETIQUETAS_ROL = { trabajador: 'Trabajador', encargado: 'Encargado de turno', admin: 'Administrador' };
     document.getElementById('equipo-lista').innerHTML = equipo.length
       ? equipo.map((m) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dotted var(--line);gap:10px;">
           <span style="font-size:13.5px;">${escapeHtml(m.nombre_mostrar) || '(sin nombre configurado)'}</span>
+          ${puedeGestionarEquipo ? `
           <select data-rol-de="${m.usuario_id}" style="font-family:inherit;font-size:12.5px;padding:6px 8px;border-radius:7px;border:1px solid var(--line);">
             <option value="trabajador" ${m.rol === 'trabajador' ? 'selected' : ''}>Trabajador</option>
             <option value="encargado" ${m.rol === 'encargado' ? 'selected' : ''}>Encargado de turno</option>
             <option value="admin" ${m.rol === 'admin' ? 'selected' : ''}>Administrador</option>
-          </select>
+          </select>` : `
+          <span class="etiqueta-estado" style="color:var(--ink-soft);background:var(--bg-soft);">${ETIQUETAS_ROL[m.rol] || m.rol}</span>`}
         </div>`).join('')
       : `<div class="vacio" style="padding:14px;">Aún no hay nadie más vinculado a esta empresa.</div>`;
 
@@ -392,6 +403,7 @@ async function pintarEmpleados(cont) {
 // ============================================================
 async function pintarConfiguracion(cont, activa) {
   const tmax = await obtenerTiemposMax();
+  const puedeSucursal = esSuperAdminTI() || tieneFuncion(activa.plan, 'admin_sucursal');
   cont.innerHTML = `
     <div class="tarjeta" style="max-width:480px;margin-bottom:22px;">
       <h3 style="margin-top:0;">⏱️ Tiempos máximos por estación (minutos)</h3>
@@ -408,13 +420,18 @@ async function pintarConfiguracion(cont, activa) {
       <button class="boton boton-ghost" id="btn-guardar-tmax">Guardar tiempos</button>
     </div>
 
+    ${puedeSucursal ? `
     <div class="tarjeta" style="max-width:480px;margin-bottom:22px;">
       <h3 style="margin-top:0;">Nombre del local / sucursal</h3>
       <div class="campo"><label>Texto bajo el logo</label><input type="text" id="cfg-sucursal" value="${escapeHtml(activa.sucursal || '')}"></div>
       <button class="boton boton-ghost" id="btn-guardar-sucursal">Guardar</button>
-    </div>
+    </div>` : `
+    <div class="tarjeta" style="max-width:480px;margin-bottom:22px;">
+      <h3 style="margin-top:0;">Nombre del local / sucursal</h3>
+      <p class="subtitulo">Disponible en los planes Plata y Oro.</p>
+    </div>`}
 
-    ${tieneFuncion(activa.plan, 'nombre_app') ? `
+    ${tieneFuncion(activa.plan, 'nombre_app') || esSuperAdminTI() ? `
     <div class="tarjeta" style="max-width:480px;">
       <h3 style="margin-top:0;">Nombre de la aplicación</h3>
       <p class="subtitulo" style="margin-bottom:12px;">Reemplaza "DENA ERP" por el nombre de tu negocio en el menú de arriba. Déjalo vacío para volver al nombre por defecto.</p>
@@ -445,7 +462,8 @@ async function pintarConfiguracion(cont, activa) {
     } catch (e) { console.error(e); toast('No se pudo guardar'); }
   };
 
-  document.getElementById('btn-guardar-sucursal').onclick = async () => {
+  const btnSucursal = document.getElementById('btn-guardar-sucursal');
+  if (btnSucursal) btnSucursal.onclick = async () => {
     const texto = document.getElementById('cfg-sucursal').value.trim();
     try { await guardarSucursal(texto); activa.sucursal = texto; toast('Nombre de local actualizado'); }
     catch (e) { console.error(e); toast('No se pudo guardar'); }

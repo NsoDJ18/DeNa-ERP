@@ -472,6 +472,26 @@ create policy admin_edita_su_empresa on empresas for update
     where usuario_id = auth.uid() and rol = 'admin'
   ));
 
+-- Candado real: aunque un admin de la empresa técnicamente puede editar
+-- su fila (para sucursal, etc.), el PLAN no lo puede cambiar nadie salvo
+-- soporte TI — si no, un cliente podría subirse de plan gratis llamando
+-- la API directo, sin pasar por el panel de Soporte.
+create or replace function bloquear_cambio_plan_sin_ti()
+returns trigger as $$
+begin
+  if new.plan is distinct from old.plan
+     and coalesce((select email from auth.users where id = auth.uid()), '') not in (select email from ti_super_admins)
+  then
+    raise exception 'Solo soporte técnico puede cambiar el plan de una empresa.';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger trg_bloquear_cambio_plan
+  before update on empresas
+  for each row execute function bloquear_cambio_plan_sin_ti();
+
 -- Ejemplo de política diferenciada por rol (solo admin puede borrar productos):
 -- create policy solo_admin_borra on productos for delete
 --   using (empresa_id in (

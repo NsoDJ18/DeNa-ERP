@@ -3,7 +3,7 @@ import { abrirDetalle, badge } from './estado.js';
 import { listarEmpleados, agregarEmpleado, eliminarEmpleado } from '../data/empleados.js';
 import { listarEquipo, cambiarRolMiembro, invitarMiembro } from '../data/equipo.js';
 import { listarSolicitudesPendientes, aprobarSolicitudNC, rechazarSolicitudNC } from '../data/notasCredito.js';
-import { obtenerTiemposMax, guardarTiemposMax, guardarSucursal, guardarNombreApp } from '../data/configuracion.js';
+import { obtenerTiemposMax, guardarTiemposMax, guardarSucursal } from '../data/configuracion.js';
 import { tieneFuncion } from '../planes.js';
 import { esSuperAdminTI } from '../auth/session.js';
 import { escapeHtml, money, fdate, fdatetime, localDateStr, toast } from '../lib/util.js';
@@ -431,17 +431,10 @@ async function pintarConfiguracion(cont, activa) {
       <p class="subtitulo">Disponible en los planes Plata y Oro.</p>
     </div>`}
 
-    ${tieneFuncion(activa.plan, 'nombre_app') || esSuperAdminTI() ? `
     <div class="tarjeta" style="max-width:480px;">
       <h3 style="margin-top:0;">Nombre de la aplicación</h3>
-      <p class="subtitulo" style="margin-bottom:12px;">Reemplaza "DENA ERP" por el nombre de tu negocio en el menú de arriba. Déjalo vacío para volver al nombre por defecto.</p>
-      <div class="campo"><label>Nombre a mostrar</label><input type="text" id="cfg-nombre-app" value="${escapeHtml(activa.nombreApp || '')}" placeholder="Ej: Regalos con Cariño ERP"></div>
-      <button class="boton boton-ghost" id="btn-guardar-nombre-app">Guardar</button>
-    </div>` : `
-    <div class="tarjeta" style="max-width:480px;">
-      <h3 style="margin-top:0;">Nombre de la aplicación</h3>
-      <p class="subtitulo">Disponible en los planes Plata y Oro.</p>
-    </div>`}
+      <p class="subtitulo">¿Quieres reemplazar "DENA ERP" por el nombre de tu negocio? Contacta a soporte.</p>
+    </div>
 
     <div class="tarjeta" style="max-width:480px;margin-top:22px;background:var(--bg-soft);">
       <h3 style="margin-top:0;">🔒 Autorización de notas de crédito</h3>
@@ -467,15 +460,5 @@ async function pintarConfiguracion(cont, activa) {
     const texto = document.getElementById('cfg-sucursal').value.trim();
     try { await guardarSucursal(texto); activa.sucursal = texto; toast('Nombre de local actualizado'); }
     catch (e) { console.error(e); toast('No se pudo guardar'); }
-  };
-
-  const btnNombreApp = document.getElementById('btn-guardar-nombre-app');
-  if (btnNombreApp) btnNombreApp.onclick = async () => {
-    const texto = document.getElementById('cfg-nombre-app').value.trim();
-    try {
-      await guardarNombreApp(texto);
-      activa.nombreApp = texto || null;
-      toast('Nombre de la aplicación actualizado — recarga la página para verlo en el menú');
-    } catch (e) { console.error(e); toast('No se pudo guardar'); }
   };
 }

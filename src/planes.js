@@ -17,7 +17,7 @@
 //   admin_resumen        → src/views/admin.js            (Resumen + Solicitudes NC + lista de Equipo + tiempos máximos)
 //   admin_gestion_equipo → src/views/admin.js            (Plata+: editar jerarquía + pestaña Empleados)
 //   admin_sucursal       → src/views/admin.js            (Plata+: nombre del local/sucursal)
-//   nombre_app           → src/main.js                   (Plata+: cambiar "DENA ERP" por el nombre del negocio)
+//   nombre_app           → src/views/soporte.js         (SOLO soporte TI — ya no es autogestionable por el cliente)
 //   marca_propia         → (pendiente de construir)      (Oro: logo y color propios)
 //   soporte_prioritario  → (no es pantalla, es compromiso comercial tuyo)
 //
@@ -49,7 +49,6 @@ export const PLANES = {
       'estado', 'torre', 'hoy',
       'admin_gestion_equipo',
       'admin_sucursal',
-      'nombre_app',
     ],
     limiteUsuarios: 11, // 1 admin + 10 trabajadores
   },
@@ -59,7 +58,7 @@ export const PLANES = {
     descripcion: 'Acceso completo, sin restricciones',
     funciones: [
       'recepcion', 'bodega', 'ventas', 'punto_venta', 'monitor', 'admin_resumen',
-      'estado', 'torre', 'hoy', 'admin_gestion_equipo', 'admin_sucursal', 'nombre_app',
+      'estado', 'torre', 'hoy', 'admin_gestion_equipo', 'admin_sucursal',
       'marca_propia',
       'soporte_prioritario',
     ],

@@ -210,3 +210,25 @@ migracion_restriccion_roles_bronce.sql
 ```
 (Corre la primera antes que la segunda — la segunda depende de que exista
 la tabla de la primera.)
+
+## 🆕 Botón de Soporte (solo TI) + nombre de app ya no es autogestionable
+
+- **Nueva pantalla "🛠️ Soporte"** en el menú — solo aparece para tu cuenta
+  TI (`c.medinagodoy@gmail.com`). Desde ahí puedes:
+  - Cambiar el nombre de la app de cualquier empresa donde estés vinculado
+  - **Cambiar el plan de la empresa** sin entrar a Supabase — se aplica al
+    instante, sin tocar Table Editor
+- El cliente **ya no ve ni puede editar** el nombre de la app desde su
+  Configuración — si lo quiere, tiene que pedírtelo a ti.
+- **Candado real agregado**: aunque alguien intentara cambiar el `plan`
+  de su empresa llamando la API directo (no por la interfaz), la base de
+  datos lo rechaza si no es la cuenta de soporte TI — antes esto **no
+  estaba protegido**, cualquier admin técnicamente podía intentar
+  auto-subirse de plan.
+
+### Migración nueva
+```
+migracion_restriccion_cambio_plan.sql
+```
+(Corre después de `migracion_ti_super_admin.sql`, igual que las otras dos
+de restricción de roles/precios.)

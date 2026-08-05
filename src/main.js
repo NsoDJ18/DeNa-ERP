@@ -20,6 +20,7 @@ import { renderPuntoVenta } from './views/puntoVenta.js';
 import { renderAdmin } from './views/admin.js';
 import { renderMonitor } from './views/monitor.js';
 import { renderConfirmarPago } from './views/confirmarPago.js';
+import { renderSoporte } from './views/soporte.js';
 import { tieneFuncion } from './planes.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
@@ -41,6 +42,7 @@ const NAV = [
   { ruta: 'punto_venta', etiqueta: 'Punto de venta', funcion: 'punto_venta' },
   { ruta: 'monitor', etiqueta: '📺 Monitor', funcion: 'monitor' },
   { ruta: 'admin', etiqueta: 'Administración', funcion: 'admin_resumen', soloAdmin: true },
+  { ruta: 'soporte', etiqueta: '🛠️ Soporte', funcion: null, soloTI: true },
 ];
 
 const app = document.getElementById('app');
@@ -153,7 +155,11 @@ function nombreMostrarApp(activa) {
 
 function renderAppShell(sesion, activa) {
   app.className = ''; // ya no es pantalla centrada
-  const navVisible = NAV.filter((n) => (esSuperAdminTI() || tieneFuncion(activa.plan, n.funcion)) && (!n.soloAdmin || activa.rol === 'admin'));
+  const navVisible = NAV.filter((n) =>
+    (!n.soloTI || esSuperAdminTI())
+    && (n.funcion === null || esSuperAdminTI() || tieneFuncion(activa.plan, n.funcion))
+    && (!n.soloAdmin || activa.rol === 'admin')
+  );
   app.innerHTML = `
     <div class="app-shell">
       <div class="app-nav">
@@ -173,6 +179,7 @@ function renderAppShell(sesion, activa) {
 
   registrarRuta('bodega', (contenedor) => renderBodega(contenedor, activa), 'bodega');
   registrarRuta('admin', (contenedor) => renderAdmin(contenedor, activa), 'admin_resumen');
+  registrarRuta('soporte', (contenedor) => renderSoporte(contenedor, activa)); // sin funcion: el acceso lo controla soloTI en el menú + esSuperAdminTI() adentro
   configurarControlAcceso((funcion) => esSuperAdminTI() || tieneFuncion(activa.plan, funcion));
   iniciarRouter();
 }

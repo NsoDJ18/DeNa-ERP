@@ -232,3 +232,75 @@ migracion_restriccion_cambio_plan.sql
 ```
 (Corre después de `migracion_ti_super_admin.sql`, igual que las otras dos
 de restricción de roles/precios.)
+
+## 🆕 Bug de Torre + estado del plan visible + comparación
+
+### ✅ Bug real corregido: Torre de control no abría el detalle
+Las tarjetas del tablero solo tenían botones de acción (Avanzar/Entregado)
+— nunca se pudo hacer clic en la tarjeta misma para ver el detalle
+completo, como sí funciona en Estado. Ya quedó igual en las dos pantallas.
+
+### ✅ Estado del plan, visible para todos los roles
+Nuevo botón **"🏷️ Plan [Bronce/Plata/Oro]"** en la barra superior — lo ve
+cualquiera (trabajador, encargado, admin), no solo el dueño. Al hacer
+clic, abre una tabla comparativa completa de los 3 planes, con el actual
+resaltado, y un botón de WhatsApp para contactar a soporte y pedir el
+cambio.
+
+**IMPORTANTE — tienes que editar un dato tuyo real**: en `src/planes.js`
+busca `CONTACTO_SOPORTE` y reemplaza `+56900000000` por tu número real de
+WhatsApp. Ahora mismo apunta a un número de ejemplo que no es tuyo.
+
+```js
+export const CONTACTO_SOPORTE = {
+  texto: 'Escríbenos por WhatsApp',
+  whatsapp: '+56900000000', // ← cambia esto por tu número real
+};
+```
+
+No hace falta migración de base de datos para esta ronda — todo es frontend.
+
+## 🆕 Bug importante corregido: Bronce no podía avanzar pedidos
+
+Encontraste un vacío real: como Bronce no tiene Torre de control ni
+Estado, no existía **ninguna forma** de mover un pedido de una etapa a
+otra después de crearlo — quedaba pegado en "Ingreso" para siempre.
+
+**Solución**: Recepción ahora tiene una sección fija abajo del formulario,
+"Pedidos en curso", disponible en TODOS los planes (no solo Bronce). Cada
+pedido activo aparece con su folio, cliente y estado — tocarlo abre el
+mismo detalle completo de Estado (con el paso a paso, notas, avanzar,
+entregar con pago, nota de crédito si corresponde), sin necesitar la
+pantalla de Estado dedicada.
+
+**Por qué esto no le quita valor a Plata**: Estado sigue siendo la
+experiencia superior (buscador, semáforo de plazos, filtros) — esto en
+Recepción es la versión mínima para operar, no un reemplazo. Bronce ya
+puede trabajar de principio a fin; Plata sigue siendo más cómodo de usar.
+
+Sin migración SQL — cambio de frontend solamente.
+
+## 🆕 Auditoría completa de vacíos entre planes
+
+Revisé sistemáticamente cada pantalla de Bronce buscando dependencias
+ocultas de pantallas exclusivas de Plata/Oro (el mismo tipo de problema
+que Torre/Estado con Recepción).
+
+### ✅ Confirmado autosuficiente (sin vacíos)
+Ventas, Punto de venta, Bodega y Monitor — ninguna depende de Estado ni
+Torre para funcionar. Solo importan de `data/` y `lib/`, nunca de otra
+pantalla exclusiva de un plan superior.
+
+### ✅ Corregido: autocompletado de nombres en Bronce
+Bronce no tiene el panel de Empleados (a propósito, según lo definido),
+pero eso dejaba el autocompletado de "Responsable"/"Vendedor(a)" siempre
+vacío, sin ninguna forma de llenarlo. Ahora se llena solo: la primera vez
+que alguien escribe un nombre nuevo en Recepción, Ventas o Punto de venta,
+queda guardado como sugerencia para la próxima vez — sin necesitar el
+panel de gestión de personal, que sigue siendo exclusivo de Plata+.
+
+### Validación final del paquete completo
+- 32 archivos `.js` del frontend, sin errores de importación cruzada
+- 7 Edge Functions, todas con sintaxis balanceada
+- 14 archivos `.sql` (schema + migraciones), todos balanceados
+- Build de producción sin errores ni advertencias

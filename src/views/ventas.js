@@ -3,6 +3,7 @@ import {
   abrirTurno, registrarCierreTurno, METODOS_BASE,
 } from '../data/turnos.js';
 import { escapeHtml, money, todayStr, toast } from '../lib/util.js';
+import { sugerirEmpleado } from '../data/empleados.js';
 
 export async function renderVentas(contenedor) {
   contenedor.innerHTML = `
@@ -150,6 +151,7 @@ export async function renderVentas(contenedor) {
     ev.target.disabled = true;
     try {
       await abrirTurno({ fecha, responsable, fondoInicial: Number(fondoInicial) });
+      sugerirEmpleado(responsable);
       toast('Turno abierto con ' + money(fondoInicial) + ' de fondo');
       document.getElementById('a-responsable').value = '';
       document.getElementById('a-fondo').value = '';
@@ -188,6 +190,7 @@ export async function renderVentas(contenedor) {
     ev.target.disabled = true;
     try {
       await registrarCierreTurno({ fecha, responsable, detalle, folioTBK, justificacion });
+      sugerirEmpleado(responsable);
       toast(diferenciaTotal === 0 ? 'Turno cerrado, caja cuadrada ✓' : 'Turno cerrado con diferencia justificada');
       document.getElementById('c-responsable').value = '';
       document.getElementById('c-folio-tbk').value = '';

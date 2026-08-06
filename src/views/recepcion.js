@@ -1,5 +1,6 @@
-import { crearOrden } from '../data/ordenes.js';
-import { llenarDatalistEmpleados } from '../data/empleados.js';
+import { crearOrden, listarOrdenes, suscribirseAOrdenes } from '../data/ordenes.js';
+import { llenarDatalistEmpleados, sugerirEmpleado } from '../data/empleados.js';
+import { abrirDetalle, badge } from './estado.js';
 import { toast, fdate, money, escapeHtml } from '../lib/util.js';
 
 const TIPOS_TRABAJO = [
@@ -58,9 +59,36 @@ export async function renderRecepcion(contenedor) {
     </div>
 
     <div id="recepcion-confirmacion" style="display:none;"></div>
+
+    <div style="margin-top:26px;">
+      <h3 style="font-size:15px;margin-bottom:4px;">Pedidos en curso</h3>
+      <p class="subtitulo" style="margin-bottom:12px;">Toca un pedido para ver el detalle y avanzarlo a la siguiente etapa.</p>
+      <div id="recepcion-pedidos-lista"></div>
+    </div>
   `;
 
   llenarDatalistEmpleados(document.getElementById('lista-empleados')).catch(console.error);
+
+  await pintarPedidosEnCurso();
+  const cancelarSuscripcion = suscribirseAOrdenes(() => pintarPedidosEnCurso());
+
+  async function pintarPedidosEnCurso() {
+    const listaEl = document.getElementById('recepcion-pedidos-lista');
+    if (!listaEl) return; // ya no estamos en esta pantalla
+    const ordenes = (await listarOrdenes()).filter((o) => o.estado !== 'entregado' && o.estado !== 'cancelado');
+    listaEl.innerHTML = ordenes.length
+      ? ordenes.slice(0, 30).map((o) => `
+        <div class="fila-clickable" data-id="${o.id}">
+          <div>
+            <span class="mono" style="color:var(--gold);font-weight:700;">${o.folio}</span>
+            <div style="font-weight:600;">${escapeHtml(o.cliente)}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">${escapeHtml(o.tipo)} · Entrega ${fdate(o.fecha_entrega)}</div>
+          </div>
+          ${badge(o.estado)}
+        </div>`).join('')
+      : `<div class="vacio" style="padding:20px;">Sin pedidos en curso por ahora.</div>`;
+    listaEl.querySelectorAll('[data-id]').forEach((fila) => { fila.onclick = () => abrirDetalle(fila.dataset.id); });
+  }
 
   document.getElementById('btn-limpiar').onclick = () => renderRecepcion(contenedor);
 
@@ -92,6 +120,7 @@ export async function renderRecepcion(contenedor) {
     ev.target.textContent = 'Generando…';
     try {
       const orden = await crearOrden(datos);
+      sugerirEmpleado(datos.responsable);
       mostrarConfirmacion(orden);
       toast(`Orden ${orden.folio} generada y guardada`);
     } catch (e) {
@@ -196,4 +225,6 @@ export async function renderRecepcion(contenedor) {
     };
     document.getElementById('btn-otro').onclick = () => renderRecepcion(contenedor);
   }
+
+  return cancelarSuscripcion;
 }

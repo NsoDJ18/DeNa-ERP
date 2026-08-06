@@ -21,6 +21,23 @@ export async function agregarEmpleado(nombre) {
   return data;
 }
 
+/** Agrega un nombre a las sugerencias SOLO si no existe todavía — pensado
+ *  para llamarse solo, en segundo plano, cada vez que alguien escribe un
+ *  nombre nuevo en un campo "responsable"/"vendedor(a)". Así el
+ *  autocompletado se llena solo con el uso normal, sin necesitar el panel
+ *  de Empleados (que en Bronce está reservado a soporte). No falla la
+ *  pantalla si esto no funciona — es una mejora silenciosa, no crítica. */
+export async function sugerirEmpleado(nombre) {
+  if (!nombre || !nombre.trim()) return;
+  try {
+    const actuales = await listarEmpleados();
+    const yaExiste = actuales.some((e) => e.nombre.toLowerCase() === nombre.trim().toLowerCase());
+    if (!yaExiste) await agregarEmpleado(nombre.trim());
+  } catch (e) {
+    console.error('No se pudo sugerir el nombre para autocompletado:', e);
+  }
+}
+
 export async function eliminarEmpleado(empleadoId) {
   const { error } = await supabase.from('empleados').delete().eq('id', empleadoId);
   if (error) throw error;

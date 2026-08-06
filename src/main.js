@@ -21,7 +21,8 @@ import { renderAdmin } from './views/admin.js';
 import { renderMonitor } from './views/monitor.js';
 import { renderConfirmarPago } from './views/confirmarPago.js';
 import { renderSoporte } from './views/soporte.js';
-import { tieneFuncion } from './planes.js';
+import { tieneFuncion, PLANES } from './planes.js';
+import { abrirModalPlanes } from './lib/planesInfo.js';
 
 registrarRuta('recepcion', renderRecepcion, 'recepcion');
 registrarRuta('torre', renderTorre, 'torre');
@@ -165,6 +166,7 @@ function renderAppShell(sesion, activa) {
       <div class="app-nav">
         <div class="marca">${nombreMostrarApp(activa)} <span style="color:var(--ink-soft);font-weight:400;font-size:12px;">— ${activa.nombreEmpresa}</span></div>
         <div class="botones" id="nav-botones">
+          <button class="nav-boton" id="btn-ver-plan" style="border-color:var(--gold);color:var(--navy);font-weight:700;">🏷️ Plan ${PLANES[activa.plan]?.etiqueta || activa.plan}</button>
           ${navVisible.map((n) => `<button class="nav-boton" data-ruta="${n.ruta}">${n.etiqueta}</button>`).join('')}
           <button class="nav-boton" id="btn-salir" style="border-color:#F0C9C9;color:#9B2C2C;">Cerrar sesión</button>
         </div>
@@ -172,6 +174,7 @@ function renderAppShell(sesion, activa) {
       <div class="app-contenido" id="contenido"></div>
     </div>
   `;
+  document.getElementById('btn-ver-plan').onclick = () => abrirModalPlanes(activa.plan);
   document.getElementById('nav-botones').querySelectorAll('[data-ruta]').forEach((btn) => {
     btn.onclick = () => { location.hash = btn.dataset.ruta; };
   });

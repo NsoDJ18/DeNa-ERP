@@ -4,6 +4,7 @@ import { listarVentasDeHoy, registrarVenta, kpisDelDia } from '../data/ventasMos
 import { listarAbonosDelDia } from '../data/ordenes.js';
 import { cargarTurnosDelDia, turnoAbiertoVigente } from '../data/turnos.js';
 import { buscarOrdenPorFolio, aplicarNotaCreditoVerificada } from '../data/seguridad.js';
+import { sugerirEmpleado } from '../data/empleados.js';
 import { abrirModal, cerrarModal } from '../lib/modal.js';
 import { escapeHtml, money, todayStr, toast } from '../lib/util.js';
 
@@ -136,6 +137,7 @@ export async function renderPuntoVenta(contenedor) {
     try {
       const total = carrito.reduce((s, it) => s + it.subtotal, 0);
       const venta = await registrarVenta({ items: carrito, metodoPago, responsable, clienteNombre, clienteTelefono });
+      sugerirEmpleado(responsable);
       toast(`Venta registrada por ${money(total)}`);
       carrito = [];
       pintarCarrito();

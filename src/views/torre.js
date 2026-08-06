@@ -1,6 +1,7 @@
 import { listarOrdenes, cambiarEstadoOrden, suscribirseAOrdenes } from '../data/ordenes.js';
 import { obtenerTiemposMax } from '../data/configuracion.js';
 import { confirmarEntrega } from '../lib/entrega.js';
+import { abrirDetalle } from './estado.js';
 import { escapeHtml, toast } from '../lib/util.js';
 
 const ESTACIONES = [
@@ -57,13 +58,17 @@ export async function renderTorre(contenedor) {
     }).join('');
 
     kanban.querySelectorAll('[data-avanzar]').forEach((btn) => {
-      btn.onclick = () => avanzar(btn.dataset.avanzar, btn.dataset.siguiente);
+      btn.onclick = (ev) => { ev.stopPropagation(); avanzar(btn.dataset.avanzar, btn.dataset.siguiente); };
     });
     kanban.querySelectorAll('[data-entregar]').forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
         const orden = ordenes.find((o) => o.id === btn.dataset.entregar);
         if (orden) confirmarEntrega(orden, pintar);
       };
+    });
+    kanban.querySelectorAll('[data-abrir]').forEach((tarjetaEl) => {
+      tarjetaEl.onclick = () => abrirDetalle(tarjetaEl.dataset.abrir);
     });
   }
 
@@ -78,7 +83,7 @@ export async function renderTorre(contenedor) {
     const idx = INDICE[o.estado];
     const siguiente = idx < ESTACIONES.length - 1 ? ESTACIONES[idx + 1].key : null;
     return `
-      <div class="mini-tarjeta">
+      <div class="mini-tarjeta" data-abrir="${o.id}" style="cursor:pointer;">
         <div class="mono" style="color:var(--gold);font-weight:700;">${o.folio}</div>
         <div style="font-weight:600;margin:2px 0 3px;">${escapeHtml(o.cliente)}</div>
         <div style="font-size:12px;color:var(--ink-soft);">${escapeHtml(o.tipo)}</div>

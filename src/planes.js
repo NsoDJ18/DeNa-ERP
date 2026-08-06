@@ -85,6 +85,29 @@ export function todasLasFunciones() {
   return [...new Set(Object.values(PLANES).flatMap((p) => p.funciones))];
 }
 
+/** Etiquetas legibles de cada función, para mostrar la comparación de planes. */
+export const ETIQUETAS_FUNCION = {
+  recepcion: 'Recepción de pedidos',
+  bodega: 'Bodega (inventario)',
+  ventas: 'Cuadratura de caja (Ventas)',
+  punto_venta: 'Punto de venta',
+  monitor: 'Monitor de producción (TV)',
+  admin_resumen: 'Panel de administración (KPIs, Excel)',
+  estado: 'Estado (buscar y seguir pedidos)',
+  torre: 'Torre de control (tablero de producción)',
+  hoy: 'Vista "Hoy" (atrasados, entregas del día)',
+  admin_gestion_equipo: 'Gestión de equipo y jerarquías',
+  admin_sucursal: 'Nombre de sucursal personalizable',
+  marca_propia: 'Marca y color propios (próximamente)',
+  soporte_prioritario: 'Soporte prioritario',
+};
+
+/** Cómo contactar a soporte para cambiar de plan — edita esto con tu dato real. */
+export const CONTACTO_SOPORTE = {
+  texto: 'Escríbenos por WhatsApp',
+  whatsapp: '+56951505593', // reemplaza por tu número real
+};
+
 /** Límite de usuarios del plan (null = sin límite). */
 export function limiteUsuarios(plan) {
   return PLANES[plan]?.limiteUsuarios ?? PLANES['bronce'].limiteUsuarios;
